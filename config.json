@@ -1,0 +1,53 @@
+{
+    "name": "melo-tts-zh",
+    "display_name": "MeloTTS Chinese",
+    "version": "1.0.0",
+    "description": "MeloTTS text-to-speech model for Chinese",
+    "voices": [
+        {
+            "name": "default",
+            "display_name": "Default Voice",
+            "language": "zh",
+            "language_name": "Chinese",
+            "gender": "neutral",
+            "style": "neutral",
+            "audio_encoding": 0,
+            "speaking_rate": 1.0,
+            "pitch": 0.0,
+            "volume_gain": 0.0,
+            "sample_rate": 44100,
+            "language_code": 1,
+            "description": "Default voice for Chinese",
+            "capabilities": {
+                "supports_gender": false,
+                "supports_style": false,
+                "supports_sample_rate": false,
+                "supports_ssml": false,
+                "supports_speed_control": false,
+                "supports_pitch_control": false,
+                "supports_volume_control": false,
+                "supports_resampling": false
+            }
+        }
+    ],
+    "model_type": "melo",
+    "runtime": {
+        "language": "zh",
+        "qnn_version": {
+            "major": 2,
+            "minor": 45,
+            "patch": 0
+        },
+        "arch_bit": 64,
+        "scratch_mem_size_req": 3200000,
+        "is_model_quantized": false
+    },
+    "assets": {
+        "bert_model": "bert_wrapper.bin",
+        "bert_tokenizer": "bert_zh_tokenizer.bin",
+        "bert_normalizer": "bert_normalizer.bin",
+        "melo_encoder": "encoder.bin",
+        "melo_flow": "flow.bin",
+        "melo_decoder": "decoder.bin"
+    }
+}
