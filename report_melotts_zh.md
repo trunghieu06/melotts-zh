@@ -121,7 +121,7 @@ Trong kiến trúc tổng thể, mô hình bao gồm:
 * **Giải pháp:** Giữ nguyên `encoder.bin` ở **Float32 (18.5 MB)**. Do module này chiếm ít hơn 5% lượng tính toán, việc giữ Float32 vừa bảo đảm độ tự nhiên 100% của câu nói vừa không gây áp lực tính toán lên hệ thống.
 
 ---
-
+https://github.com/trunghieu06/melotts-zh/tree/main
 ## ⚖️ 4. RANH GIỚI ĐIỆN TOÁN & TỶ TRỌNG HOẠT ĐỘNG (CPU VS NPU)
 
 Mô hình triển khai phân tách của MeloTTS-ZH tuân thủ nghiêm ngặt nguyên lý **Đồng xử lý bất đối xứng (Heterogeneous Computing)**:
