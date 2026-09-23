@@ -1,0 +1,50 @@
+# Virtual Environment (Tuyệt đối không push 2.6 GB venv lên Git)
+venv/
+env/
+.env
+
+# Python Cache & Session files
+__pycache__/
+*.py[cod]
+*$py.class
+:memory:.ses
+*.ses
+.DS_Store
+
+# Nested MeloTTS repository
+MeloTTS/
+
+# Temporary test audio and logs
+test_*.wav
+handtest/
+test_eval_output/
+tmp_compile_logs/
+tmp_logs/
+tmp_eval/
+
+# Calibration data (>100MB exceeds GitHub limits)
+calibration_data/
+
+# Large model binaries (>100MB vượt quá giới hạn GitHub)
+onnx_models/
+quantized_models/
+*.onnx
+*.onnx.zip
+*.dlc
+*.pt
+*.pth
+
+# 495 file âm thanh FP32 nặng ~140MB (chỉ giữ lại 5 file mẫu đối chứng đã track)
+output_eval/wav_fp32/*.wav
+!output_eval/wav_fp32/000004_fp32.wav
+!output_eval/wav_fp32/000005_fp32.wav
+!output_eval/wav_fp32/000014_fp32.wav
+!output_eval/wav_fp32/000018_fp32.wav
+!output_eval/wav_fp32/000027_fp32.wav
+
+output_eval/wav_quant/*.wav
+!output_eval/wav_quant/000004_quant.wav
+!output_eval/wav_quant/000005_quant.wav
+!output_eval/wav_quant/000014_quant.wav
+!output_eval/wav_quant/000018_quant.wav
+!output_eval/wav_quant/000027_quant.wav

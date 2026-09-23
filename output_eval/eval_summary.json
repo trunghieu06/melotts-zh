@@ -1,8 +1,8 @@
 {
   "num_evaluated": 5,
-  "avg_mcd_db": 1.1554,
-  "avg_cosine_similarity": 0.9947799999999999,
-  "avg_latency_fp32_ms": 0.14882481191307306,
-  "avg_latency_quant_ms": 0.17245858907699585,
-  "target_device": "Qualcomm Dragonwing IQ-9075 EVK"
+  "avg_mcd_db": 182.41047189187287,
+  "avg_cosine_similarity": 0.6648783683776855,
+  "avg_latency_fp32_ms": 0.0,
+  "avg_latency_quant_ms": 0.0,
+  "hardware_mode": "native_bin"
 }

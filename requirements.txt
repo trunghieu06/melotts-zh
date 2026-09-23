@@ -1,0 +1,13 @@
+# MeloTTS local package
+-e ./MeloTTS
+
+# Audio metrics & fast alignment
+fastdtw>=0.3.4
+
+# ONNX export and runtime verification
+onnx>=1.15.0
+onnxruntime>=1.16.0
+
+# Qualcomm AI Hub cloud platform
+qai-hub>=0.14.0
+
