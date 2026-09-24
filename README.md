@@ -65,5 +65,37 @@ Khi lập trình C++/Python để ghép nối các file `.bin` trên phần cứ
 ### 🧹 Artifact Trimming (Cắt rác âm thanh)
 Khối Vocoder khi xử lý vùng Zero-Padding sẽ sinh ra xung nhịp (thường là các tiếng "bíp" chói tai ở phần đuôi audio). Cần sử dụng công thức sau để xén (crop) bỏ đoạn dư thừa trước khi lưu thành file `.wav` hoàn chỉnh:
 ```text
-Số_sample_hợp_lệ = Số_frame_thật * hop_size
+Số_sample_hợp_lệ = Số_frame_thật * hop_size  (với hop_size = 512)
 ```
+
+---
+
+## 🏃 5. Hướng dẫn Chạy Mô hình Lượng tử hóa (Inference Guide)
+
+Để chạy suy luận trực tiếp mô hình đã lượng tử hóa (`decoder` W8A16, `flow` UINT16, `encoder`), sử dụng script [**`infer_quantized.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/infer_quantized.py):
+
+### 🔊 1. Chạy suy luận một câu tiếng Trung bất kỳ:
+```bash
+python infer_quantized.py --text "你好，欢迎体验高通量化语音合成系统。" --output output.wav
+```
+
+### 📄 2. Chạy hàng loạt từ một tệp văn bản (`.txt`):
+```bash
+python infer_quantized.py --file eval_dataset/baker_500_eval.txt
+```
+
+### ⚙️ 3. Các tùy chọn dòng lệnh nâng cao:
+| Tham số | Ý nghĩa | Mặc định |
+| :--- | :--- | :---: |
+| `--text`, `-t` | Câu văn bản tiếng Trung cần tổng hợp | Câu mẫu chào mừng |
+| `--output`, `-o` | Tệp âm thanh `.wav` đầu ra | `output_quantized.wav` |
+| `--encoder-mode` | `fp32` (Chuẩn Qualcomm - 99.39% độ trung thực) hoặc `quantized` (W8A16) | `fp32` |
+| `--speed` | Điều chỉnh tốc độ nói (ví dụ `1.2` để nói nhanh hơn) | `1.0` |
+| `--file`, `-f` | Đọc danh sách câu từ tệp `.txt` | `None` |
+
+### 📊 4. Chạy kiểm định đo đạc độ tương đồng (Benchmark):
+Đối chiếu độ trung thực (% so với mô hình FP32 gốc) trên tập dữ liệu kiểm thử chuẩn 500 câu Baker CSMSC:
+```bash
+python benchmark_eval_dataset.py
+```
+*(Kết quả đánh giá và biểu đồ phân bổ được lưu tại `output_eval/benchmark_stitched/stitched_benchmark_report.json`)*
