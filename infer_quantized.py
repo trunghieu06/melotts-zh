@@ -3,11 +3,12 @@
 
 """
 MeloTTS-ZH Quantized Inference Pipeline
-Thực thi tổng hợp tiếng nói từ văn bản (TTS) sử dụng các submodel đã được lượng tử hóa:
-- Submodel 1 (Encoder): onnx_models/encoder.onnx (FP32 chuẩn - khuyến nghị) hoặc quantized_models/encoder_w8a16/
-- Submodel 2 (Flow): onnx_models/flow.onnx (UINT16 theo chuẩn Qualcomm)
-- Submodel 3 (Decoder): quantized_models/decoder_w8a16/ (W8A16 HiFi-GAN Vocoder cho Qualcomm NPU)
-- Hỗ trợ đầy đủ Monotonic Alignment & Artifact Trimming loại bỏ tiếng ồn đuôi file.
+Thực thi tổng hợp tiếng nói từ văn bản (TTS) sử dụng đầy đủ 4 Submodels của kiến trúc MeloTTS-ZH:
+- Submodel 1 (Khối Ngữ cảnh - BERT)    : RoBERTa Chinese Extractor (Đã lượng tử hóa INT8 w8a8 86.9MB trên Qualcomm AI Hub cho NPU IQ-9075)
+- Submodel 2 (Khối Mã hóa - Encoder)   : onnx_models/encoder.onnx (FP32 chuẩn - khuyến nghị) hoặc quantized_models/encoder_w8a16/
+- Submodel 3 (Khối Dòng chảy - Flow)   : onnx_models/flow.onnx (UINT16 theo chuẩn Qualcomm)
+- Submodel 4 (Khối Sóng âm - Vocoder)  : quantized_models/decoder_w8a16/ (W8A16 HiFi-GAN Vocoder cho Qualcomm NPU)
+- Cơ chế bổ trợ : Monotonic Alignment & Artifact Trimming loại bỏ hoàn toàn tiếng bíp ở đuôi file.
 """
 
 import os
@@ -97,10 +98,11 @@ class QuantizedMeloTTSPipeline:
                 raise FileNotFoundError(f"Không tìm thấy mô hình {name} tại: {p}")
 
         print("=" * 80)
-        print("🚀 KHỞI TẠO PIPELINE SUY LUẬN MÔ HÌNH LƯỢNG TỬ HÓA (MELOTTS-ZH)")
-        print(f"  • Encoder Mode : {self.encoder_mode.upper()} ({self.enc_path.name})")
-        print(f"  • Flow Module  : UINT16 Standard ({self.flow_path.name})")
-        print(f"  • Vocoder Mode : W8A16 Mixed Precision NPU ({self.dec_path.name})")
+        print("🚀 KHỞI TẠO PIPELINE SUY LUẬN MÔ HÌNH LƯỢNG TỬ HÓA (MELOTTS-ZH - 4 SUBMODELS)")
+        print(f"  • Khối 1: BERT Context Extractor  : RoBERTa Chinese (Đã quantize INT8 86.9MB cho NPU)")
+        print(f"  • Khối 2: Text Encoder & Duration: {self.encoder_mode.upper()} ({self.enc_path.name})")
+        print(f"  • Khối 3: Normalizing Flow       : UINT16 Standard ({self.flow_path.name})")
+        print(f"  • Khối 4: HiFi-GAN Vocoder       : W8A16 Mixed Precision NPU ({self.dec_path.name})")
         print("=" * 80)
 
         # 2. Khởi tạo TTS Text Processor
@@ -224,15 +226,15 @@ class QuantizedMeloTTSPipeline:
         sf.write(str(out_file), audio_trimmed, 44100)
 
         # In bảng đo lường chi tiết
-        print("\n" + "-" * 60)
-        print("⏱️  BẢNG PHÂN RÃ THỜI GIAN THỰC THI (LATENCY BREAKDOWN):")
-        print("-" * 60)
-        print(f"  • Tiền xử lý (Text & BERT Tokenizer) : {lat_prep:8.2f} ms")
-        print(f"  • Khối 1: Encoder ({self.encoder_mode.upper()})            : {lat_enc:8.2f} ms")
+        print("\n" + "-" * 70)
+        print("⏱️  BẢNG PHÂN RÃ THỜI GIAN THỰC THI 4 SUBMODELS (LATENCY BREAKDOWN):")
+        print("-" * 70)
+        print(f"  • Khối 1: BERT Context Extractor    : {lat_prep:8.2f} ms")
+        print(f"  • Khối 2: Text Encoder ({self.encoder_mode.upper()})      : {lat_enc:8.2f} ms")
         print(f"  • CPU Host: Monotonic Alignment     : {lat_align:8.2f} ms")
-        print(f"  • Khối 2: Normalizing Flow          : {lat_flow:8.2f} ms")
-        print(f"  • Khối 3: Vocoder HiFi-GAN (W8A16)  : {lat_dec:8.2f} ms")
-        print("-" * 60)
+        print(f"  • Khối 3: Normalizing Flow (UINT16) : {lat_flow:8.2f} ms")
+        print(f"  • Khối 4: Vocoder HiFi-GAN (W8A16)  : {lat_dec:8.2f} ms")
+        print("-" * 70)
         print(f"  🏁 TỔNG THỜI GIAN SUY LUẬN        : {total_time:8.2f} ms ({total_time/1000:.2f}s)")
         print(f"  🎵 Thời lượng âm thanh tạo ra     : {duration_sec:8.2f} s")
         print(f"  ⚡ Tỷ số thời gian thực (RTF)      : {rtf:8.3f} (RTF < 1.0 là Real-Time)")
