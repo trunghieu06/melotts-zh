@@ -99,3 +99,74 @@ python infer_quantized.py --file eval_dataset/baker_500_eval.txt
 python benchmark_eval_dataset.py
 ```
 *(Kết quả đánh giá và biểu đồ phân bổ được lưu tại `output_eval/benchmark_stitched/stitched_benchmark_report.json`)*
+
+---
+
+## 💻 6. Hướng dẫn Thiết lập & Tiếp tục trên Máy Khác (Setup on a New Machine)
+
+Khi clone dự án về một máy tính mới (Linux/macOS), hãy làm theo các bước chuẩn mực dưới đây:
+
+### Bước 1: Clone kho mã nguồn
+```bash
+git clone https://github.com/trunghieu06/melotts-zh.git
+cd melotts-zh
+```
+
+### Bước 2: Tạo và kích hoạt môi trường ảo Python (Python 3.10 hoặc 3.11)
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### Bước 3: Cài đặt các gói phụ thuộc
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+pip install -e ./MeloTTS
+python -m unidic download
+```
+
+### Bước 4: Tạo lại các Submodel ONNX (Nếu chưa có `onnx_models/`)
+Do các tệp nhị phân ONNX lớn không được lưu trực tiếp trên Git, bạn có thể tự sinh lại ngay lập tức chỉ với 1 câu lệnh:
+```bash
+python export_onnx.py
+```
+Lệnh trên sẽ tự động khởi tạo MeloTTS và bóc tách thành 4 file chuẩn tại `onnx_models/`:
+* `onnx_models/encoder.onnx`
+* `onnx_models/flow.onnx`
+* `onnx_models/decoder.onnx`
+* `onnx_models/bert_wrapper.onnx`
+
+### Bước 5: (Tùy chọn) Cấu hình Qualcomm AI Hub nếu muốn lượng tử hóa lại trên Cloud
+```bash
+qai-hub configure --api_token <YOUR_QUALCOMM_AI_HUB_API_TOKEN>
+```
+
+---
+
+## 🗂️ 7. Danh mục Toàn bộ Mã nguồn & Chức năng Từng File
+
+| Tên tệp mã nguồn | Vai trò & Chức năng chính | Lệnh thực thi mẫu |
+| :--- | :--- | :--- |
+| [**`infer_quantized.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/infer_quantized.py) | **Script suy luận chính:** Nhận văn bản tiếng Trung, chạy qua 4 Submodel (Vocoder W8A16, Flow UINT16, BERT, Encoder), thực hiện Artifact Trimming và xuất ra file WAV. | `python infer_quantized.py --text "你好"` |
+| [**`benchmark_eval_dataset.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/benchmark_eval_dataset.py) | **Đánh giá độ tương đồng:** Ghép nối 4 submodels, đối chiếu với mô hình PyTorch FP32 gốc trên tập Baker CSMSC, tính Cosine Similarity & MCD. | `python benchmark_eval_dataset.py` |
+| [**`generate_quick_test.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/generate_quick_test.py) | **Sinh mẫu đối chiếu:** Tự động tạo 10 câu âm thanh đối chiếu 3 chiều (FP32 Gốc vs Full-Quantized vs Standard-Quantized) vào `quick_test_full_quantized/`. | `python generate_quick_test.py` |
+| [**`export_onnx.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/export_onnx.py) | **Xuất mô hình ONNX:** Bóc tách mô hình nguyên khối PyTorch thành 4 tệp `.onnx` theo đúng chuẩn giao diện phần cứng Qualcomm NPU (`metadata.json`). | `python export_onnx.py` |
+| [**`prepare_calibration_data.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/prepare_calibration_data.py) | **Tạo dữ liệu hiệu chuẩn (PTQ):** Trích xuất các mẫu câu tiếng Trung thực tế từ Baker CSMSC để tạo file nén `.npz` nạp cho AI Hub Quantizer. | `python prepare_calibration_data.py` |
+| [**`prepare_encoder_calib.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/prepare_encoder_calib.py) | **Hiệu chuẩn Encoder:** Chuẩn bị tập dữ liệu hiệu chuẩn riêng biệt cho khối Text Encoder. | `python prepare_encoder_calib.py` |
+| [**`prepare_eval_data.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/prepare_eval_data.py) | **Chuẩn bị ngữ liệu kiểm thử:** Bóc tách 500 câu chuẩn từ Baker CSMSC vào `eval_dataset/baker_500_eval.txt`. | `python prepare_eval_data.py` |
+| [**`quantize_bert_iq9075.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/quantize_bert_iq9075.py) | **Lượng tử hóa BERT:** Nộp job lượng tử hóa INT8 (`w8a8`) và biên dịch NPU cho `bert_wrapper` lên Qualcomm AI Hub (IQ-9075 EVK). | `python quantize_bert_iq9075.py` |
+| [**`quantize_encoder_iq9075.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/quantize_encoder_iq9075.py) | **Lượng tử hóa Encoder:** Nộp job lượng tử hóa W8A16 cho `encoder` lên Qualcomm AI Hub. | `python quantize_encoder_iq9075.py` |
+| [**`run_quantize_and_eval_iq9075.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/run_quantize_and_eval_iq9075.py) | **Quy trình tổng thể trên AI Hub:** Tự động upload, quantize, compile, profile và tải về các artifact `.dlc` / `.onnx`. | `python run_quantize_and_eval_iq9075.py` |
+| [**`run_fp32_baseline.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/run_fp32_baseline.py) | **Sinh dữ liệu gốc FP32:** Sinh trọn vẹn 500 file audio chuẩn FP32 đối chứng tại `output_eval/wav_fp32/`. | `python run_fp32_baseline.py` |
+| [**`run_quant_baseline.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/run_quant_baseline.py) | **Kiểm tra sơ bộ lượng tử hóa:** Chạy kiểm thử nhanh một số câu với các file lượng tử hóa ban đầu. | `python run_quant_baseline.py` |
+| [**`eval.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/eval.py) | **Hàm tính toán chỉ số âm học:** Thư viện tính Mel-Cepstral Distortion (MCD) dùng FastDTW và Cosine Similarity phổ Mel. | `python eval.py` |
+| [**`generate_handtest.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/generate_handtest.py) | **Tạo file nghe thủ công:** Sinh một số câu thử nghiệm đặc thù để kiểm tra bằng tai. | `python generate_handtest.py` |
+
+---
+
+## 📚 8. Các Báo cáo Kỹ thuật Chuyên sâu trong Repository
+
+* [**`report_melotts_zh.md`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/report_melotts_zh.md): Báo cáo kỹ thuật tổng thể, phân tích kiến trúc, rào cản phần cứng NPU, kết quả lượng tử hóa trên AI Hub và tuyên bố tiến độ thực nghiệm.
+* [**`cpu_npu_ratio_analysis.md`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/cpu_npu_ratio_analysis.md): Phân tích chi tiết tỷ lệ tải trọng **95% NPU vs 5% CPU**, giải thích 5 lý do tại sao không thể và không nên chạy 100% NPU.
+* [**`quick_test_full_quantized/README.md`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/quick_test_full_quantized/README.md): Bảng đối chiếu thời lượng và tai nghe của 10 câu mẫu (FP32 vs Full-Quantized vs Standard-Quantized).
