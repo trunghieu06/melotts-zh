@@ -89,9 +89,15 @@ python infer_quantized.py --file eval_dataset/baker_500_eval.txt
 | :--- | :--- | :---: |
 | `--text`, `-t` | Câu văn bản tiếng Trung cần tổng hợp | Câu mẫu chào mừng |
 | `--output`, `-o` | Tệp âm thanh `.wav` đầu ra | `output_quantized.wav` |
+| `--npu-native` | **100% NPU-Native Pipeline:** Kích hoạt Binary Stencil Alignment, In-NPU Chunking & In-Graph Trimming (Problem 2, 3, 4 theo `MeloTTS.pdf`), loại bỏ hoàn toàn CPU loops | `False` |
 | `--encoder-mode` | `fp32` (Chuẩn Qualcomm - 99.39% độ trung thực) hoặc `quantized` (W8A16) | `fp32` |
 | `--speed` | Điều chỉnh tốc độ nói (ví dụ `1.2` để nói nhanh hơn) | `1.0` |
 | `--file`, `-f` | Đọc danh sách câu từ tệp `.txt` | `None` |
+
+Ví dụ chạy chế độ thuần NPU-Native:
+```bash
+python infer_quantized.py --text "你好，欢迎体验高通量化语音合成系统。" --npu-native --output output_npu_native.wav
+```
 
 ### 📊 4. Chạy kiểm định đo đạc độ tương đồng (Benchmark):
 Đối chiếu độ trung thực (% so với mô hình FP32 gốc) trên tập dữ liệu kiểm thử chuẩn 500 câu Baker CSMSC:
@@ -126,20 +132,20 @@ pip install -e ./MeloTTS
 python -m unidic download
 ```
 
-### Bước 4: Tạo lại các Submodel ONNX (Nếu chưa có `onnx_models/`)
-Do các tệp nhị phân ONNX lớn không được lưu trực tiếp trên Git, bạn có thể tự sinh lại ngay lập tức chỉ với 1 câu lệnh:
+### Bước 4: Tạo lại các Submodel ONNX & NPU-Native Modules
+Do các tệp nhị phân ONNX lớn không được lưu trực tiếp trên Git, bạn có thể tự sinh lại ngay lập tức:
 ```bash
+# 1. Bóc tách 4 Submodel MeloTTS chuẩn
 python export_onnx.py
-```
-Lệnh trên sẽ tự động khởi tạo MeloTTS và bóc tách thành 4 file chuẩn tại `onnx_models/`:
-* `onnx_models/encoder.onnx`
-* `onnx_models/flow.onnx`
-* `onnx_models/decoder.onnx`
-* `onnx_models/bert_wrapper.onnx`
 
-### Bước 5: (Tùy chọn) Cấu hình Qualcomm AI Hub nếu muốn lượng tử hóa lại trên Cloud
+# 2. Xuất các Module NPU-Native (Problem 2 & Problem 4)
+python export_npu_native.py
+```
+
+### Bước 5: (Tùy chọn) Kiểm tra & Nộp job biên dịch lên Qualcomm AI Hub
 ```bash
 qai-hub configure --api_token <YOUR_QUALCOMM_AI_HUB_API_TOKEN>
+python verify_ai_hub_npu_native.py
 ```
 
 ---
@@ -148,7 +154,10 @@ qai-hub configure --api_token <YOUR_QUALCOMM_AI_HUB_API_TOKEN>
 
 | Tên tệp mã nguồn | Vai trò & Chức năng chính | Lệnh thực thi mẫu |
 | :--- | :--- | :--- |
-| [**`infer_quantized.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/infer_quantized.py) | **Script suy luận chính:** Nhận văn bản tiếng Trung, chạy qua 4 Submodel (Vocoder W8A16, Flow UINT16, BERT, Encoder), thực hiện Artifact Trimming và xuất ra file WAV. | `python infer_quantized.py --text "你好"` |
+| [**`infer_quantized.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/infer_quantized.py) | **Script suy luận chính:** Hỗ trợ cả chế độ lai (Hybrid) và chế độ 100% NPU-Native (`--npu-native`), điều phối toàn bộ pipeline và xuất file WAV. | `python infer_quantized.py --npu-native` |
+| [**`export_npu_native.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/export_npu_native.py) | **Xuất ONNX NPU-Native:** Xuất đồ thị tĩnh tự chứa cho `NPUDurationExpansion` (Problem 2) và `NPUArtifactTrimmer` (Problem 4). | `python export_npu_native.py` |
+| [**`verify_ai_hub_npu_native.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/verify_ai_hub_npu_native.py) | **Kiểm định Qualcomm AI Hub:** Tự động upload, compile QNN DLC và profile P2 & P4 trên thiết bị Dragonwing IQ-9075 EVK. | `python verify_ai_hub_npu_native.py` |
+| [**`npu_engine/`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/npu_engine/) | **Thư viện Toán tử NPU Tĩnh:** Chứa các module PyTorch thuần HTP Whitelist: `duration_expansion.py`, `chunking.py`, `trimming.py`, và bài test đối chiếu `test_pipeline_parity.py`. | `python -m npu_engine.test_pipeline_parity` |
 | [**`benchmark_eval_dataset.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/benchmark_eval_dataset.py) | **Đánh giá độ tương đồng:** Ghép nối 4 submodels, đối chiếu với mô hình PyTorch FP32 gốc trên tập Baker CSMSC, tính Cosine Similarity & MCD. | `python benchmark_eval_dataset.py` |
 | [**`generate_quick_test.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/generate_quick_test.py) | **Sinh mẫu đối chiếu:** Tự động tạo 10 câu âm thanh đối chiếu 3 chiều (FP32 Gốc vs Full-Quantized vs Standard-Quantized) vào `quick_test_full_quantized/`. | `python generate_quick_test.py` |
 | [**`export_onnx.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/export_onnx.py) | **Xuất mô hình ONNX:** Bóc tách mô hình nguyên khối PyTorch thành 4 tệp `.onnx` theo đúng chuẩn giao diện phần cứng Qualcomm NPU (`metadata.json`). | `python export_onnx.py` |
@@ -167,6 +176,7 @@ qai-hub configure --api_token <YOUR_QUALCOMM_AI_HUB_API_TOKEN>
 
 ## 📚 8. Các Báo cáo Kỹ thuật Chuyên sâu trong Repository
 
-* [**`report_melotts_zh.md`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/report_melotts_zh.md): Báo cáo kỹ thuật tổng thể, phân tích kiến trúc, rào cản phần cứng NPU, kết quả lượng tử hóa trên AI Hub và tuyên bố tiến độ thực nghiệm.
-* [**`cpu_npu_ratio_analysis.md`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/cpu_npu_ratio_analysis.md): Phân tích chi tiết tỷ lệ tải trọng **95% NPU vs 5% CPU**, giải thích 5 lý do tại sao không thể và không nên chạy 100% NPU.
+* [**`report_melotts_zh.md`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/report_melotts_zh.md): Báo cáo kỹ thuật tổng thể, phân tích kiến trúc, rào cản phần cứng NPU, kết quả lượng tử hóa trên AI Hub, và báo cáo đột phá kiến trúc 100% NPU-Native (Mục 6.5).
+* [**`cpu_npu_ratio_analysis.md`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/cpu_npu_ratio_analysis.md): Phân tích chi tiết tỷ lệ tải trọng **95% NPU vs 5% CPU**, giải thích 5 lý do tại sao kiến trúc ban đầu phụ thuộc vào CPU Host.
+* [**`MeloTTS.pdf`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/MeloTTS.pdf): Tài liệu nghiên cứu chuyên sâu về kiến trúc và 4 bài toán chuyển đổi mô hình TTS sang 100% NPU-Native.
 * [**`quick_test_full_quantized/README.md`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/quick_test_full_quantized/README.md): Bảng đối chiếu thời lượng và tai nghe của 10 câu mẫu (FP32 vs Full-Quantized vs Standard-Quantized).

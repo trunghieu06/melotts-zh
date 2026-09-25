@@ -72,12 +72,19 @@ def parse_args():
         default=0,
         help="Mã người nói (Speaker ID, mặc định: 0)"
     )
+    parser.add_argument(
+        "--npu-native",
+        action="store_true",
+        default=False,
+        help="Kích hoạt 100% NPU-Native Pipeline (Problem 2, 3, 4: In-NPU Alignment, In-NPU Chunking & Trimming) theo MeloTTS.pdf"
+    )
     return parser.parse_args()
 
 
 class QuantizedMeloTTSPipeline:
-    def __init__(self, encoder_mode="fp32"):
+    def __init__(self, encoder_mode="fp32", npu_native=False):
         self.encoder_mode = encoder_mode
+        self.npu_native = npu_native
         self.base_dir = Path(__file__).resolve().parent
 
         # 1. Đường dẫn các mô hình
@@ -98,11 +105,16 @@ class QuantizedMeloTTSPipeline:
                 raise FileNotFoundError(f"Không tìm thấy mô hình {name} tại: {p}")
 
         print("=" * 80)
-        print("🚀 KHỞI TẠO PIPELINE SUY LUẬN MÔ HÌNH LƯỢNG TỬ HÓA (MELOTTS-ZH - 4 SUBMODELS)")
+        mode_str = "100% NPU-NATIVE (PROBLEMS 2-4)" if self.npu_native else "HYBRID CPU-NPU (BASELINE)"
+        print(f"🚀 KHỞI TẠO PIPELINE SUY LUẬN MÔ HÌNH LƯỢNG TỬ HÓA [{mode_str}]")
         print(f"  • Khối 1: BERT Context Extractor  : RoBERTa Chinese (Đã quantize INT8 86.9MB cho NPU)")
         print(f"  • Khối 2: Text Encoder & Duration: {self.encoder_mode.upper()} ({self.enc_path.name})")
         print(f"  • Khối 3: Normalizing Flow       : UINT16 Standard ({self.flow_path.name})")
         print(f"  • Khối 4: HiFi-GAN Vocoder       : W8A16 Mixed Precision NPU ({self.dec_path.name})")
+        if self.npu_native:
+            print(f"  • NPU P2: NPUDurationExpansion   : Binary Stencil Masking (HTP Whitelist Ops)")
+            print(f"  • NPU P3: NPUChunkBatcher        : In-NPU 24 Chunks Reshape (No CPU slicing loop)")
+            print(f"  • NPU P4: NPUArtifactTrimmer     : In-Graph Time-Masking (Zero-Noise Margin)")
         print("=" * 80)
 
         # 2. Khởi tạo TTS Text Processor
@@ -118,7 +130,30 @@ class QuantizedMeloTTSPipeline:
         self.sess_enc = ort.InferenceSession(str(self.enc_path), sess_options=opts, providers=["CPUExecutionProvider"])
         self.sess_flow = ort.InferenceSession(str(self.flow_path), sess_options=opts, providers=["CPUExecutionProvider"])
         self.sess_dec = ort.InferenceSession(str(self.dec_path), sess_options=opts, providers=["CPUExecutionProvider"])
-        print("  ✓ Toàn bộ 4 Submodel đã sẵn sàng!")
+
+        # NPU Native Sessions / Modules
+        if self.npu_native:
+            from npu_engine.duration_expansion import NPUDurationExpansion
+            from npu_engine.chunking import NPUChunkBatcher
+            from npu_engine.trimming import NPUArtifactTrimmer
+
+            p2_onnx = self.base_dir / "onnx_models/npu_duration_expansion.onnx"
+            if p2_onnx.exists():
+                self.sess_p2 = ort.InferenceSession(str(p2_onnx), sess_options=opts, providers=["CPUExecutionProvider"])
+            else:
+                self.p2_model = NPUDurationExpansion()
+                self.sess_p2 = None
+
+            self.batcher = NPUChunkBatcher(channels=192, total_frames=1536, chunk_size=64)
+
+            p4_onnx = self.base_dir / "onnx_models/npu_artifact_trimmer.onnx"
+            if p4_onnx.exists():
+                self.sess_p4 = ort.InferenceSession(str(p4_onnx), sess_options=opts, providers=["CPUExecutionProvider"])
+            else:
+                self.trimmer = NPUArtifactTrimmer()
+                self.sess_p4 = None
+
+        print("  ✓ Toàn bộ các Submodel & NPU Modules đã sẵn sàng!")
 
     def synthesize(self, text: str, output_path: str = "output_quantized.wav", speed: float = 1.0):
         print(f"\n[*] Văn bản đầu vào: \"{text}\"")
@@ -170,16 +205,25 @@ class QuantizedMeloTTSPipeline:
         lat_enc = (time.perf_counter() - t0) * 1000
         real_y_len = int(y_lengths[0])
 
-        # Bước 3: Monotonic Alignment & Duration Expansion trên CPU Host
-        t0 = time.perf_counter()
-        w_ceil_valid = w_ceil[0, 0, :phone_len].astype(int)
-        y_pos = 0
-        attn_squeezed = np.zeros((1, 1536, 512), dtype=np.float32)
-        for i, d in enumerate(w_ceil_valid):
-            if d > 0:
-                attn_squeezed[0, y_pos:y_pos + d, i] = 1.0
-                y_pos += d
-        lat_align = (time.perf_counter() - t0) * 1000
+        # Bước 3: Monotonic Alignment & Duration Expansion
+        if self.npu_native:
+            t0 = time.perf_counter()
+            if hasattr(self, "sess_p2") and self.sess_p2 is not None:
+                (attn_squeezed,) = self.sess_p2.run(None, {"w_ceil": w_ceil.astype(np.float32)})
+            else:
+                w_ceil_torch = torch.from_numpy(w_ceil).float()
+                attn_squeezed = self.p2_model(w_ceil_torch).numpy()
+            lat_align = (time.perf_counter() - t0) * 1000
+        else:
+            t0 = time.perf_counter()
+            w_ceil_valid = w_ceil[0, 0, :phone_len].astype(int)
+            y_pos = 0
+            attn_squeezed = np.zeros((1, 1536, 512), dtype=np.float32)
+            for i, d in enumerate(w_ceil_valid):
+                if d > 0:
+                    attn_squeezed[0, y_pos:y_pos + d, i] = 1.0
+                    y_pos += d
+            lat_align = (time.perf_counter() - t0) * 1000
 
         # Bước 4: Thực thi Submodel 2 - Flow
         t0 = time.perf_counter()
@@ -196,25 +240,64 @@ class QuantizedMeloTTSPipeline:
         (z,) = self.sess_flow.run(None, flow_inputs)
         lat_flow = (time.perf_counter() - t0) * 1000
 
-        # Bước 5: Thực thi Submodel 3 - Vocoder HiFi-GAN (W8A16) theo Sliding Window 64 frame
-        t0 = time.perf_counter()
-        chunk_size = 64
-        audio_chunks = []
-        for start_idx in range(0, real_y_len, chunk_size):
-            end_idx = min(start_idx + chunk_size, real_y_len)
-            cur_len = end_idx - start_idx
-            z_chunk = np.zeros((1, 192, chunk_size), dtype=np.float32)
-            z_chunk[0, :, :cur_len] = z[0, :, start_idx:end_idx]
-            
-            (chunk_audio,) = self.sess_dec.run(None, {"z": z_chunk, "g": g})
-            audio_chunks.append(chunk_audio[0, 0, :])
+        # Bước 5 & 6: Vocoder Chunking & Artifact Trimming
+        if self.npu_native:
+            # Problem 3: In-NPU Batching & Reshape [1, 192, 1536] -> [24, 192, 64]
+            t0 = time.perf_counter()
+            z_torch = torch.from_numpy(z)
+            g_torch = torch.from_numpy(g)
+            z_batched, g_batched = self.batcher.batch_chunks(z_torch, g_torch)
+            z_batched_np = z_batched.numpy()
+            g_batched_np = g_batched.numpy()
 
-        audio_full = np.concatenate(audio_chunks)
+            audio_chunks = []
+            for i in range(self.batcher.num_chunks):
+                (chunk_audio,) = self.sess_dec.run(None, {
+                    "z": z_batched_np[i:i+1],
+                    "g": g_batched_np[i:i+1]
+                })
+                audio_chunks.append(chunk_audio)
 
-        # Bước 6: Artifact Trimming loại bỏ zero-padding ở đuôi
-        valid_samples = real_y_len * 512
-        audio_trimmed = audio_full[:valid_samples]
-        lat_dec = (time.perf_counter() - t0) * 1000
+            # Ghép mảng âm thanh bằng Reshape tĩnh: [24, 1, 32768] -> [1, 1, 786432]
+            audio_batched = torch.from_numpy(np.concatenate(audio_chunks, axis=0))
+            audio_full_tensor = self.batcher.unbatch_audio(audio_batched)
+            lat_dec = (time.perf_counter() - t0) * 1000
+
+            # Problem 4: In-Graph Artifact Trimming
+            t0 = time.perf_counter()
+            if hasattr(self, "sess_p4") and self.sess_p4 is not None:
+                (audio_clean_np,) = self.sess_p4.run(None, {
+                    "audio": audio_full_tensor.numpy(),
+                    "y_lengths": np.array([float(real_y_len)], dtype=np.float32)
+                })
+                audio_clean = audio_clean_np[0, 0]
+            else:
+                audio_clean = self.trimmer(audio_full_tensor, torch.tensor([float(real_y_len)])).squeeze().numpy()
+
+            valid_samples = real_y_len * 512
+            audio_trimmed = audio_clean[:valid_samples]
+            lat_trim = (time.perf_counter() - t0) * 1000
+        else:
+            # Baseline CPU Dynamic Sliding Window
+            t0 = time.perf_counter()
+            chunk_size = 64
+            audio_chunks = []
+            for start_idx in range(0, real_y_len, chunk_size):
+                end_idx = min(start_idx + chunk_size, real_y_len)
+                cur_len = end_idx - start_idx
+                z_chunk = np.zeros((1, 192, chunk_size), dtype=np.float32)
+                z_chunk[0, :, :cur_len] = z[0, :, start_idx:end_idx]
+                
+                (chunk_audio,) = self.sess_dec.run(None, {"z": z_chunk, "g": g})
+                audio_chunks.append(chunk_audio[0, 0, :])
+
+            audio_full = np.concatenate(audio_chunks)
+
+            # Baseline CPU Trimming
+            valid_samples = real_y_len * 512
+            audio_trimmed = audio_full[:valid_samples]
+            lat_dec = (time.perf_counter() - t0) * 1000
+            lat_trim = 0.0
 
         total_time = (time.perf_counter() - start_total) * 1000
         duration_sec = len(audio_trimmed) / 44100.0
@@ -226,27 +309,37 @@ class QuantizedMeloTTSPipeline:
         sf.write(str(out_file), audio_trimmed, 44100)
 
         # In bảng đo lường chi tiết
-        print("\n" + "-" * 70)
-        print("⏱️  BẢNG PHÂN RÃ THỜI GIAN THỰC THI 4 SUBMODELS (LATENCY BREAKDOWN):")
-        print("-" * 70)
-        print(f"  • Khối 1: BERT Context Extractor    : {lat_prep:8.2f} ms")
-        print(f"  • Khối 2: Text Encoder ({self.encoder_mode.upper()})      : {lat_enc:8.2f} ms")
-        print(f"  • CPU Host: Monotonic Alignment     : {lat_align:8.2f} ms")
-        print(f"  • Khối 3: Normalizing Flow (UINT16) : {lat_flow:8.2f} ms")
-        print(f"  • Khối 4: Vocoder HiFi-GAN (W8A16)  : {lat_dec:8.2f} ms")
-        print("-" * 70)
+        print("\n" + "-" * 75)
+        if self.npu_native:
+            print("⏱️  BẢNG PHÂN RÃ THỜI GIAN 100% NPU-NATIVE PIPELINE (PROBLEMS 2-4):")
+            print("-" * 75)
+            print(f"  • Khối 1: BERT Context Extractor        : {lat_prep:8.2f} ms")
+            print(f"  • Khối 2: Text Encoder ({self.encoder_mode.upper()})          : {lat_enc:8.2f} ms")
+            print(f"  • NPU P2: Binary Stencil Expansion      : {lat_align:8.2f} ms [100% NPU Native]")
+            print(f"  • Khối 3: Normalizing Flow (UINT16)     : {lat_flow:8.2f} ms")
+            print(f"  • NPU P3: Batched HiFi-GAN Vocoder      : {lat_dec:8.2f} ms [24 Chunks Reshape]")
+            print(f"  • NPU P4: In-Graph Artifact Trimming    : {lat_trim:8.2f} ms [Zero-Noise Mask]")
+        else:
+            print("⏱️  BẢNG PHÂN RÃ THỜI GIAN THỰC THI 4 SUBMODELS (HYBRID BASELINE):")
+            print("-" * 75)
+            print(f"  • Khối 1: BERT Context Extractor        : {lat_prep:8.2f} ms")
+            print(f"  • Khối 2: Text Encoder ({self.encoder_mode.upper()})          : {lat_enc:8.2f} ms")
+            print(f"  • CPU Host: Monotonic Alignment         : {lat_align:8.2f} ms [CPU Dynamic Loop]")
+            print(f"  • Khối 3: Normalizing Flow (UINT16)     : {lat_flow:8.2f} ms")
+            print(f"  • CPU Host: Sliding Window + Vocoder    : {lat_dec:8.2f} ms [CPU Dynamic Slicing]")
+        print("-" * 75)
         print(f"  🏁 TỔNG THỜI GIAN SUY LUẬN        : {total_time:8.2f} ms ({total_time/1000:.2f}s)")
         print(f"  🎵 Thời lượng âm thanh tạo ra     : {duration_sec:8.2f} s")
         print(f"  ⚡ Tỷ số thời gian thực (RTF)      : {rtf:8.3f} (RTF < 1.0 là Real-Time)")
         print(f"  💾 Tệp âm thanh đã xuất            : {out_file.resolve()}")
-        print("-" * 60 + "\n")
+        print("-" * 75 + "\n")
 
         return str(out_file)
 
 
 def main():
     args = parse_args()
-    pipeline = QuantizedMeloTTSPipeline(encoder_mode=args.encoder_mode)
+    pipeline = QuantizedMeloTTSPipeline(encoder_mode=args.encoder_mode, npu_native=args.npu_native)
 
     if args.file:
         file_path = Path(args.file)

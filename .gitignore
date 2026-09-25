@@ -16,6 +16,7 @@ MeloTTS/
 
 # Temporary test audio and logs
 test_*.wav
+quick_test_*.wav
 handtest/
 test_eval_output/
 tmp_compile_logs/
