@@ -1,0 +1,67 @@
+[
+  {
+    "id": "000004",
+    "text": "邓小平与撒切尔会晤。",
+    "file_original_fp32": "000004_original_fp32.wav",
+    "file_npu_native": "000004_npu_native.wav",
+    "duration_fp32_sec": 2.19,
+    "duration_npu_sec": 2.19,
+    "sample_rate": 44100,
+    "mel_cosine_similarity_pct": 63.37,
+    "waveform_cosine_similarity_pct": 13.43,
+    "mcd_db": 165.4,
+    "npu_latency_ms": 9562.77
+  },
+  {
+    "id": "000005",
+    "text": "老虎幼崽与宠物犬玩耍。",
+    "file_original_fp32": "000005_original_fp32.wav",
+    "file_npu_native": "000005_npu_native.wav",
+    "duration_fp32_sec": 2.19,
+    "duration_npu_sec": 2.17,
+    "sample_rate": 44100,
+    "mel_cosine_similarity_pct": 63.88,
+    "waveform_cosine_similarity_pct": 6.41,
+    "mcd_db": 184.85,
+    "npu_latency_ms": 6164.06
+  },
+  {
+    "id": "000014",
+    "text": "我回右哼哼左哼哼。",
+    "file_original_fp32": "000014_original_fp32.wav",
+    "file_npu_native": "000014_npu_native.wav",
+    "duration_fp32_sec": 1.77,
+    "duration_npu_sec": 1.81,
+    "sample_rate": 44100,
+    "mel_cosine_similarity_pct": 28.17,
+    "waveform_cosine_similarity_pct": -2.62,
+    "mcd_db": 171.6,
+    "npu_latency_ms": 5734.83
+  },
+  {
+    "id": "000018",
+    "text": "眼眶宽阔而低矮，鼻短而宽。",
+    "file_original_fp32": "000018_original_fp32.wav",
+    "file_npu_native": "000018_npu_native.wav",
+    "duration_fp32_sec": 2.65,
+    "duration_npu_sec": 2.62,
+    "sample_rate": 44100,
+    "mel_cosine_similarity_pct": 75.11,
+    "waveform_cosine_similarity_pct": 1.49,
+    "mcd_db": 197.65,
+    "npu_latency_ms": 5994.52
+  },
+  {
+    "id": "000027",
+    "text": "阿娇与百位“鬼粉丝”狂欢。",
+    "file_original_fp32": "000027_original_fp32.wav",
+    "file_npu_native": "000027_npu_native.wav",
+    "duration_fp32_sec": 2.29,
+    "duration_npu_sec": 2.36,
+    "sample_rate": 44100,
+    "mel_cosine_similarity_pct": 83.52,
+    "waveform_cosine_similarity_pct": 14.72,
+    "mcd_db": 182.14,
+    "npu_latency_ms": 6874.88
+  }
+]

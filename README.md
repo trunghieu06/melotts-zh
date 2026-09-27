@@ -169,6 +169,7 @@ python verify_ai_hub_npu_native.py
 | [**`run_quantize_and_eval_iq9075.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/run_quantize_and_eval_iq9075.py) | **Quy trình tổng thể trên AI Hub:** Tự động upload, quantize, compile, profile và tải về các artifact `.dlc` / `.onnx`. | `python run_quantize_and_eval_iq9075.py` |
 | [**`run_fp32_baseline.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/run_fp32_baseline.py) | **Sinh dữ liệu gốc FP32:** Sinh trọn vẹn 500 file audio chuẩn FP32 đối chứng tại `output_eval/wav_fp32/`. | `python run_fp32_baseline.py` |
 | [**`run_quant_baseline.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/run_quant_baseline.py) | **Kiểm tra sơ bộ lượng tử hóa:** Chạy kiểm thử nhanh một số câu với các file lượng tử hóa ban đầu. | `python run_quant_baseline.py` |
+| [**`generate_comparison_5_sentences.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/generate_comparison_5_sentences.py) | **Tạo mẫu 5 câu đối chiếu:** Tự động sinh và đo đạc chỉ số đối chiếu giữa FP32 Gốc và 100% NPU-Native vào `quick_test_npu_vs_fp32/`. | `python generate_comparison_5_sentences.py` |
 | [**`eval.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/eval.py) | **Hàm tính toán chỉ số âm học:** Thư viện tính Mel-Cepstral Distortion (MCD) dùng FastDTW và Cosine Similarity phổ Mel. | `python eval.py` |
 | [**`generate_handtest.py`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/generate_handtest.py) | **Tạo file nghe thủ công:** Sinh một số câu thử nghiệm đặc thù để kiểm tra bằng tai. | `python generate_handtest.py` |
 
@@ -176,7 +177,9 @@ python verify_ai_hub_npu_native.py
 
 ## 📚 8. Các Báo cáo Kỹ thuật Chuyên sâu trong Repository
 
+* [**`report_npu_native_solutions.md`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/report_npu_native_solutions.md): **Báo cáo chuyên sâu 100% NPU-Native:** Phân tích toán học, phương trình nhị phân ($M_{t,p}$), đồ thị bộ nhớ tĩnh và bằng chứng profile thực tế trên Qualcomm AI Hub (IQ-9075 EVK) cho cả 3 bài toán Problem 2, 3, 4.
 * [**`report_melotts_zh.md`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/report_melotts_zh.md): Báo cáo kỹ thuật tổng thể, phân tích kiến trúc, rào cản phần cứng NPU, kết quả lượng tử hóa trên AI Hub, và báo cáo đột phá kiến trúc 100% NPU-Native (Mục 6.5).
 * [**`cpu_npu_ratio_analysis.md`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/cpu_npu_ratio_analysis.md): Phân tích chi tiết tỷ lệ tải trọng **95% NPU vs 5% CPU**, giải thích 5 lý do tại sao kiến trúc ban đầu phụ thuộc vào CPU Host.
 * [**`MeloTTS.pdf`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/MeloTTS.pdf): Tài liệu nghiên cứu chuyên sâu về kiến trúc và 4 bài toán chuyển đổi mô hình TTS sang 100% NPU-Native.
+* [**`quick_test_npu_vs_fp32/README.md`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/quick_test_npu_vs_fp32/README.md): Bảng đối chiếu 5 câu audio kiểm thử suy luận giữa **Model Gốc FP32** và **Model 100% NPU-Native**.
 * [**`quick_test_full_quantized/README.md`**](file:///Users/htti/Documents/Code.nosync/melotts-zh/quick_test_full_quantized/README.md): Bảng đối chiếu thời lượng và tai nghe của 10 câu mẫu (FP32 vs Full-Quantized vs Standard-Quantized).
