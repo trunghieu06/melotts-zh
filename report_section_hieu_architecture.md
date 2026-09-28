@@ -103,14 +103,14 @@ Thông số được trích xuất trực tiếp từ siêu dữ liệu chuẩn 
 3. **Thuật toán Khử xung âm rác (Artifact Trimming):**
    * Ở đoạn chunk cuối cùng, việc độn thêm số 0 (**Zero-Padding**) cho đủ kích thước 64 frame sẽ kích thích Vocoder sinh ra tiếng "bíp" chói tai ở đuôi file âm thanh.
    * CPU Host áp dụng công thức xén chính xác tại ranh giới mẫu thực tế trước khi xuất file:
-     $$N_{\text{valid\_samples}} = N_{\text{real\_frames}} \times \text{hop\_size} \quad (\text{với } \text{hop\_size} = 512)$$
+     $$N_{\text{valid}} = N_{\text{real}} \times 512$$
 
 ---
 
 #### 2. Hướng Quantize (Quantization Strategy)
 
 ##### 2.1. Thực trạng: Kế thừa gói W8A16 có sẵn từ Qualcomm AI Hub
-Trong giai đoạn khảo sát, chúng tôi tiếp cận gói mô hình phân rã chính thức từ Qualcomm AI Hub (`voice_ai` runtime, QAIRT 2.45). Kết quả thẩm định cho thấy:
+Trong giai đoạn khảo sát, tôi tiếp cận gói mô hình phân rã chính thức từ Qualcomm AI Hub (`voice_ai` runtime, QAIRT 2.45). Kết quả thẩm định cho thấy:
 * Qualcomm đã lượng tử hóa thành công 2 khối chịu tải tính toán nặng nhất:
   * **`decoder.bin` (Vocoder):** Áp dụng công thức **W8A16 Mixed Precision** (Weights INT8 nén về 19.3 MB; Activations UINT16 giữ 65.536 mức dải động).
   * **`flow.bin` (Normalizing Flow):** Lượng tử hóa hoàn toàn sang **UINT16** (29.7 MB).
@@ -151,7 +151,7 @@ Mục tiêu là tự xây dựng quy trình lượng tử hóa bổ sung để �
 ##### 3.2. Khó khăn 2: Xung âm rác ở đuôi file do Zero-Padding trên NPU
 * **Bản chất vấn đề:** Do NPU chỉ nhận khối cố định 64 frame (`[1, 192, 64]`), ở đoạn cuối của câu nói bắt buộc phải chèn thêm số 0 (**Zero-Padding**) cho đủ kích thước. Các số 0 này kích thích mạng HiFi-GAN Vocoder phát sinh tiếng nổ lách tách hoặc tiếng "bíp" chói tai ở đuôi file âm thanh.
 * **Cách giải quyết:** Thiết lập thuật toán xén chính xác (Artifact Trimming) tại CPU Host ngay sau khi nhận tensor từ NPU:
-  $$N_{\text{valid\_samples}} = N_{\text{real\_frames}} \times \text{hop\_size} \quad (\text{với } \text{hop\_size} = 512)$$
+  $$N_{\text{valid}} = N_{\text{real}} \times 512$$
 
 ##### 3.3. Khó khăn 3: Tương thích I/O giữa Encoder tự làm và Flow có sẵn
 * **Bản chất vấn đề:** Khối `flow.bin` có sẵn của Qualcomm nhận đầu vào `m_p` và `logs_p` dạng UINT16 với các thông số lượng tử cố định (`scale: 0.0000796`, `zero_point: 34950`).
@@ -162,7 +162,7 @@ Mục tiêu là tự xây dựng quy trình lượng tử hóa bổ sung để �
 * **Cách giải quyết:** Tách toàn bộ các file `.bin` ra khỏi Git theo dõi, đưa vào `.gitignore` và phân phối thông qua GitHub Releases đính kèm hoặc tải tự động thông qua Qualcomm AI Hub.
 
 ##### 3.5. Khó khăn 5: Lỗi tương thích môi trường và thư viện trong quá trình sinh âm thanh đối chứng
-Trong quá trình chạy thực tế mô hình gốc để sinh 500 file audio đối chứng, chúng tôi đã phát hiện và xử lý thành công 3 lỗi nghiêm trọng từ mã nguồn gốc của MeloTTS:
+Trong quá trình chạy thực tế mô hình gốc để sinh 500 file audio đối chứng, tôi đã phát hiện và xử lý thành công 3 lỗi nghiêm trọng từ mã nguồn gốc của MeloTTS:
 1. **Lỗi xung đột thiết bị `RuntimeError: Passed CPU tensor to MPS op`:**
    * *Nguyên nhân:* Trong `chinese_bert.py`, thư viện tự động ép kiểu `device = "mps"` trên hệ điều hành macOS, dẫn đến việc mô hình nằm trên CPU nhưng tensor đầu vào bị chuyển sang MPS.
    * *Giải pháp:* Đã vá trực tiếp mã nguồn MeloTTS, loại bỏ đoạn ép kiểu cứng và đồng bộ hóa toàn bộ tensor trên cùng một thiết bị CPU.
@@ -197,7 +197,7 @@ Tác giả đã hoàn thành việc sinh toàn bộ **500 tệp âm thanh `.wav`
 
 ##### 4.3. Bảng kết quả thực nghiệm đối đầu (A/B Testing Table)
 
-> *Ghi chú tính minh bạch: Nhóm tuân thủ quy chuẩn số liệu thực nghiệm 100%. Các chỉ số chưa đo trên phần cứng được ghi chú rõ ràng `(Đang tiến hành đo thực tế)` và tuyệt đối không điền số liệu giả định.*
+> *Ghi chú tính minh bạch: Tôi tuân thủ quy chuẩn số liệu thực nghiệm 100%. Các chỉ số chưa đo trên phần cứng được ghi chú rõ ràng `(Đang tiến hành đo thực tế)` và tuyệt đối không điền số liệu giả định.*
 
 | Mô hình / Phiên bản | Kiểu lượng tử | Trạng thái tập dữ liệu | MCD (dB) $\downarrow$ | Cosine Similarity $\uparrow$ | RTF (NPU) $\downarrow$ | Latency (ms) $\downarrow$ | RAM Tiêu thụ $\downarrow$ |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |

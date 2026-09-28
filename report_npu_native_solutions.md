@@ -25,25 +25,27 @@ Theo chỉ đạo chiến lược, **Giai đoạn 1** tập trung giải quyết
 
 ```mermaid
 flowchart TD
-    subgraph CPU_Bound [KIẾN TRÚC HYBRID CŨ (Nghẽn CPU)]
-        A1[Encoder Output] -->|CPU Dynamic Allocation| B1[torch.repeat_interleave\nDynamic Loop on CPU]
-        B1 --> C1[Flow Model on NPU]
-        C1 -->|CPU Slicing Loop| D1[for start_idx in range: z_chunk\n24 Lần gọi NPU rời rạc]
-        D1 --> E1[HiFi-GAN Vocoder on NPU]
-        E1 -->|NumPy Crop| F1[audio[:valid_samples]\nCPU Artifact Trimming]
+    subgraph CPU_Bound ["KIẾN TRÚC HYBRID CŨ - Nghẽn CPU"]
+        A1["Encoder Output"] -->|CPU Dynamic Allocation| B1["torch.repeat_interleave<br/>Dynamic Loop trên CPU"]
+        B1 --> C1["Flow Model trên NPU"]
+        C1 -->|CPU Slicing Loop| D1["Vòng lặp cắt z_chunk<br/>24 lần gọi NPU rời rạc"]
+        D1 --> E1["HiFi-GAN Vocoder trên NPU"]
+        E1 -->|NumPy Crop| F1["Cắt audio theo valid_samples<br/>CPU Artifact Trimming"]
     end
 
-    subgraph NPU_Native [KIẾN TRÚC 100% NPU-NATIVE (Giai đoạn 1)]
-        A2[Encoder Output] -->|Binary Stencil Masking| B2[NPUDurationExpansion\nCumSum + MatMul trên NPU]
-        B2 --> C2[Flow Model on NPU]
-        C2 -->|In-NPU Reshape Batching| D2[NPUChunkBatcher\nReshape 1,192,1536 -> 24,192,64]
-        D2 --> E2[HiFi-GAN Vocoder on NPU]
-        E2 -->|In-Graph Time Masking| F2[NPUArtifactTrimmer\nLess -> Cast -> Mul trên NPU]
-        F2 --> G2[Audio Sóng Âm PCM Sạch Tuyệt Đối]
+    subgraph NPU_Native ["KIẾN TRÚC 100% NPU-NATIVE - Giai đoạn 1"]
+        A2["Encoder Output"] -->|Binary Stencil Masking| B2["NPUDurationExpansion<br/>CumSum và MatMul trên NPU"]
+        B2 --> C2["Flow Model trên NPU"]
+        C2 -->|In-NPU Reshape Batching| D2["NPUChunkBatcher<br/>Reshape 1,192,1536 sang 24,192,64"]
+        D2 --> E2["HiFi-GAN Vocoder trên NPU"]
+        E2 -->|In-Graph Time Masking| F2["NPUArtifactTrimmer<br/>Less, Cast, Mul trên NPU"]
+        F2 --> G2["Audio Sóng Âm PCM Sạch Tuyệt Đối"]
     end
 
-    style NPU_Native fill:#e6ffed,stroke:#28a745,stroke-width:2px
-    style CPU_Bound fill:#ffeef0,stroke:#d73a49,stroke-width:2px
+    classDef npuStyle fill:#e6ffed,stroke:#28a745,stroke-width:2px;
+    classDef cpuStyle fill:#ffeef0,stroke:#d73a49,stroke-width:2px;
+    class A1,B1,C1,D1,E1,F1 cpuStyle;
+    class A2,B2,C2,D2,E2,F2,G2 npuStyle;
 ```
 
 ---

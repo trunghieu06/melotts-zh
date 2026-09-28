@@ -105,7 +105,7 @@ sequenceDiagram
     participant CPU as ARM Cortex CPU Host
     participant NPU as Qualcomm Hexagon HTP NPU
 
-    User->>CPU: Gửi văn bản tiếng Trung (ví dụ: "邓小平与撒切尔会晤。")
+    User->>CPU: Gửi văn bản tiếng Trung (ví dụ: 邓小平与撒切尔会晤。)
     Note over CPU: [CPU - Tiền xử lý]<br/>Unicode Normalization & Trie Tokenizer
     CPU->>NPU: Truyền input_ids [1, 200] qua DMA
     Note over NPU: [NPU - bert_wrapper.bin (INT8)]<br/>Trích xuất 12 tầng Transformer (9.28 ms)
@@ -118,7 +118,7 @@ sequenceDiagram
     Note over NPU: [NPU - flow.bin (UINT16)]<br/>Nghịch đảo Normalizing Flow, sinh Mel Latent z
     NPU-->>CPU: Trả về latent z [1, 192, 1536]
     
-    loop Sliding Window (Mỗi khối 64 frames)
+    loop Sliding Window - Mỗi khối 64 frames
         Note over CPU: Cắt z_chunk [1, 192, 64] & Zero-padding nếu thiếu
         CPU->>NPU: Bơm z_chunk vào NPU qua DMA
         Note over NPU: [NPU - decoder.bin (W8A16)]<br/>7 tầng ConvTranspose1d sinh sóng âm (117 ms / chunk)

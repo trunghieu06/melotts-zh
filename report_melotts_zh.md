@@ -49,15 +49,15 @@ Khi đưa đồ thị nơ-ron nguyên khối (Monolithic Graph) từ PyTorch lê
 
 ```mermaid
 flowchart TD
-    Text[Văn bản Tiếng Trung thô] --> Tokenize[CPU Host: Tiền xử lý Unicode & Tokenizer]
-    Tokenize --> Sub1[1. Sub-model: bert_wrapper.bin\nRoBERTa Context Extractor\nĐầu vào: 1, 200 | Đầu ra: 1, 200, 768]
-    Sub1 --> Sub2[2. Sub-model: encoder.bin\nText Encoder & Duration Predictor\nĐầu vào: Phonemes 512, Tone 512, BERT 1024x512]
-    Sub2 --> Align[CPU Host: Duration Expansion & Monotonic Alignment\nattn_squeezed: 1, 1536, 512]
-    Align --> Sub3[3. Sub-model: flow.bin\nNormalizing Flow Inversion\nĐầu vào: 1, 1536, 512 | Đầu ra: Mel Latent z 1, 192, 1536]
-    Sub3 --> Chunk[CPU Host Sliding Window: Cắt khối tĩnh 64-frame\nz_chunk: 1, 192, 64]
-    Chunk --> Sub4[4. Sub-model: decoder.bin\nHiFi-GAN Vocoder Generator\nĐầu vào: 1, 192, 64 | Đầu ra: Audio 1, 1, 32768]
-    Sub4 --> Trim[CPU Host: Artifact Trimming & Ghép sóng âm\nvalid_samples = real_frames * 512]
-    Trim --> AudioOut[Sóng âm thanh PCM 24 kHz / 44.1 kHz]
+    Text["Văn bản Tiếng Trung thô"] --> Tokenize["CPU Host: Tiền xử lý Unicode và Tokenizer"]
+    Tokenize --> Sub1["1. Sub-model: bert_wrapper.bin<br/>RoBERTa Context Extractor<br/>Đầu vào: 1, 200 — Đầu ra: 1, 200, 768"]
+    Sub1 --> Sub2["2. Sub-model: encoder.bin<br/>Text Encoder và Duration Predictor<br/>Đầu vào: Phonemes 512, Tone 512, BERT 1024x512"]
+    Sub2 --> Align["CPU Host: Duration Expansion và Monotonic Alignment<br/>attn_squeezed: 1, 1536, 512"]
+    Align --> Sub3["3. Sub-model: flow.bin<br/>Normalizing Flow Inversion<br/>Đầu vào: 1, 1536, 512 — Đầu ra: Mel Latent z 1, 192, 1536"]
+    Sub3 --> Chunk["CPU Host Sliding Window: Cắt khối tĩnh 64-frame<br/>z_chunk: 1, 192, 64"]
+    Chunk --> Sub4["4. Sub-model: decoder.bin<br/>HiFi-GAN Vocoder Generator<br/>Đầu vào: 1, 192, 64 — Đầu ra: Audio 1, 1, 32768"]
+    Sub4 --> Trim["CPU Host: Artifact Trimming và Ghép sóng âm<br/>valid_samples = real_frames x 512"]
+    Trim --> AudioOut["Sóng âm thanh PCM 24 kHz / 44.1 kHz"]
 
     classDef npuStyle fill:#d4edda,stroke:#28a745,stroke-width:2px;
     classDef cpuStyle fill:#fff3cd,stroke:#ffc107,stroke-width:2px;
