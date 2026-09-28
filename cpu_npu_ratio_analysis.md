@@ -67,8 +67,7 @@ Nhiều người đặt câu hỏi: *"Tại sao không đưa toàn bộ 100% mã
 ---
 
 ### 3. NPU từ chối các toán tử ngẫu nhiên & phân rã động (`RandomNormalLike`)
-* Trong cấu trúc nguyên bản của mạng VITS2 (MeloTTS), khối dự đoán độ dài phát âm ngẫu nhiên (**Stochastic Duration Predictor - SDP**) sử dụng toán tử sinh số ngẫu nhiên:
-  $$\text{noise} = \text{torch.randn\_like}(x)$$
+* Trong cấu trúc nguyên bản của mạng VITS2 (MeloTTS), khối dự đoán độ dài phát âm ngẫu nhiên (**Stochastic Duration Predictor - SDP**) sử dụng toán tử sinh số ngẫu nhiên: `noise = torch.randn_like(x)`.
 * Khi tôi thực hiện biên dịch `encoder.onnx` trên Qualcomm AI Hub (Job `jpxl4eojp`), trình biên dịch QAIRT báo lỗi dừng khẩn cấp:
   ```text
   KeyError: 'No translation registered for op type onnx_randomnormallike.' (Node /sdp/RandomNormalLike)
@@ -91,8 +90,8 @@ Nhiều người đặt câu hỏi: *"Tại sao không đưa toàn bộ 100% mã
 ### 5. Xử lý triệt tiêu tiếng ồn đuôi file (Artifact Trimming)
 * Do NPU bắt buộc kích thước chunk cố định là 64 frame, đoạn âm thanh cuối cùng hầu như luôn phải đệm thêm số 0 (**Zero-Padding**).
 * Khi qua mạng HiFi-GAN Vocoder, các số 0 đệm này sẽ bị biến dạng thành các xung tín hiệu tần số cao, tạo nên tiếng nổ lách tách hoặc tiếng "bíp" chói tai ở đuôi file âm thanh.
-* Chỉ có CPU Host nắm được số frame hợp lệ thực tế ($N_{\text{real\_frames}}$) để thực hiện cắt tỉa chuẩn xác ngay trong RAM:
-  $$N_{\text{valid\_samples}} = N_{\text{real\_frames}} \times 512$$
+* Chỉ có CPU Host nắm được số frame hợp lệ thực tế ($N_{\text{real}}$) để thực hiện cắt tỉa chuẩn xác ngay trong RAM:
+  $$N_{\text{valid}} = N_{\text{real}} \times 512$$
 * Điều này giúp âm thanh xuất xưởng đạt độ sạch tuyệt đối.
 
 ---

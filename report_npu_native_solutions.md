@@ -178,16 +178,16 @@ Tôi đã đưa khâu triệt tiêu tiếng bíp thành một phép toán ma tr�
 1. **Đăng ký buffer chỉ số thời gian tĩnh:**
    $$I = [0, 1, 2, \dots, 786431] \in \mathbb{R}^{1 \times 1 \times 786432}$$
 
-2. **Tính toán ngưỡng mẫu hợp lệ từ số frame thật của Encoder:**
-   $$\text{valid\_samples} = N_{\text{frames}} \times 512$$
+2. **Tính toán ngưỡng mẫu hợp lệ từ số frame thật của Encoder ($N_{\text{valid}}$):**
+   $$N_{\text{valid}} = N_{\text{frames}} \times 512$$
 
 3. **Sinh mặt nạ nhị phân trên NPU (Binary Time Mask):**
-   $$m_i = \mathbb{I}[I_i < \text{valid\_samples}], \quad m \in \{0.0, 1.0\}^{1 \times 1 \times 786432}$$
+   $$m_i = \mathbb{I}[I_i < N_{\text{valid}}], \quad m \in \{0.0, 1.0\}^{1 \times 1 \times 786432}$$
 
 4. **Nhân phần tử triệt tiêu nhiễu zero-padding:**
    $$y_{\text{clean}} = y_{\text{audio}} \odot m$$
-   - Với $i < \text{valid\_samples}$: $m_i = 1.0 \implies y_{\text{clean}} = y_{\text{audio}}$ (Bảo toàn 100% tín hiệu âm thanh giọng nói thật).
-   - Với $i \ge \text{valid\_samples}$: $m_i = 0.0 \implies y_{\text{clean}} = 0.000000$ (Triệt tiêu hoàn toàn tiếng bíp đuôi về mức phẳng tuyệt đối).
+   - Với $i < N_{\text{valid}}$: $m_i = 1.0 \implies y_{\text{clean}} = y_{\text{audio}}$ (Bảo toàn 100% tín hiệu âm thanh giọng nói thật).
+   - Với $i \ge N_{\text{valid}}$: $m_i = 0.0 \implies y_{\text{clean}} = 0.000000$ (Triệt tiêu hoàn toàn tiếng bíp đuôi về mức phẳng tuyệt đối).
 
 ### 4.3. Hiện thực hóa mã nguồn (`npu_engine/trimming.py`)
 ```python

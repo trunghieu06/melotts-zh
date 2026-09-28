@@ -114,14 +114,14 @@ Trong kiến trúc tổng thể, mô hình bao gồm:
 ### 3.2. Tiếng xung âm rác ở đuôi file do Zero-Padding trên NPU
 * **Vấn đề:** Do NPU yêu cầu kích thước cố định 64 frame (`[1, 192, 64]`), ở đoạn chunk cuối cùng bắt buộc phải đệm thêm số 0 (**Zero-Padding**) cho đủ kích thước. Các số 0 này kích thích mạng HiFi-GAN Vocoder phát sinh tiếng nổ lách tách hoặc tiếng "bíp" chói tai ở đuôi file âm thanh.
 * **Giải pháp:** Áp dụng thuật toán xén chính xác (**Artifact Trimming**) tại CPU Host ngay sau khi nhận tensor từ NPU:
-  $$N_{\text{valid\_samples}} = N_{\text{real\_frames}} \times \text{hop\_size} \quad (\text{với } \text{hop\_size} = 512)$$
+  $$N_{\text{valid}} = N_{\text{real}} \times 512$$
 
 ### 3.3. Hiện tượng lệch nhịp nói khi lượng tử hóa Duration Predictor
 * **Vấn đề:** Khi lượng tử hóa `encoder` sang W8A16, sai số làm tròn số nguyên ở các tầng dự đoán độ dài $\exp(\text{logw})$ khiến số frame âm thanh bị co ngắn lại (ví dụ từ 151 frame còn 118 frame, làm audio phát nhanh bất thường).
 * **Giải pháp:** Giữ nguyên `encoder.bin` ở **Float32 (18.5 MB)**. Do module này chiếm ít hơn 5% lượng tính toán, việc giữ Float32 vừa bảo đảm độ tự nhiên 100% của câu nói vừa không gây áp lực tính toán lên hệ thống.
 
 ---
-https://github.com/trunghieu06/melotts-zh/tree/main
+
 ## ⚖️ 4. RANH GIỚI ĐIỆN TOÁN & TỶ TRỌNG HOẠT ĐỘNG (CPU VS NPU)
 
 Mô hình triển khai phân tách của MeloTTS-ZH tuân thủ nghiêm ngặt nguyên lý **Đồng xử lý bất đối xứng (Heterogeneous Computing)**:
@@ -219,7 +219,7 @@ Nhằm giải quyết bài toán chi phí CPU đắt đỏ trên thiết bị đ
 * **Kết quả:** Triệt tiêu hoàn toàn chi phí điều phối CPU và phân mảnh bộ nhớ giữa các chunk.
 
 ### 3. Problem 4: In-Graph Artifact Trimming & Dequantize
-* **Giải pháp:** Thay vì dùng CPU NumPy crop `audio[:valid_samples]`, áp dụng mặt nạ thời gian nhị phân tĩnh (Binary Time Masking) $y_{\text{clean}} = y_{\text{audio}} \odot m$ (với $m_i = \mathbb{I}[i < \text{valid\_samples}]$) qua chuỗi `Less -> Cast -> Mul`. Vùng zero-padding được triệt tiêu 100% về mức 0 tuyệt đối, loại bỏ toàn bộ tiếng bíp.
+* **Giải pháp:** Thay vì dùng CPU NumPy crop `audio[:valid_samples]`, áp dụng mặt nạ thời gian nhị phân tĩnh (Binary Time Masking) $y_{\text{clean}} = y_{\text{audio}} \odot m$ (với $m_i = \mathbb{I}[i < N_{\text{valid}}]$) qua chuỗi `Less -> Cast -> Mul`. Vùng zero-padding được triệt tiêu 100% về mức 0 tuyệt đối, loại bỏ toàn bộ tiếng bíp.
 * **Kiểm định Qualcomm AI Hub (Dragonwing IQ-9075 EVK):**
   * Compile Job: `jgk264zng` $\to$ **SUCCESS** (Target Model: `mn0g42g8m`).
   * Profile Job: $\to$ **SUCCESS**, độ trễ thực thi NPU phần cứng chỉ **2.49 ms**!
