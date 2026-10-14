@@ -1,0 +1,315 @@
+{
+    "model_id": "melotts_zh",
+    "model_name": "MeloTTS-ZH",
+    "runtime": "voice_ai",
+    "precision": "mixed_with_float",
+    "tool_versions": {
+        "qairt": "2.45.0.260326154327"
+    },
+    "model_files": {
+        "encoder.bin": {
+            "inputs": {
+                "sid": {
+                    "shape": [
+                        1
+                    ],
+                    "dtype": "int32"
+                },
+                "bert": {
+                    "shape": [
+                        1,
+                        1024,
+                        512
+                    ],
+                    "dtype": "float32"
+                },
+                "ja_bert": {
+                    "shape": [
+                        1,
+                        768,
+                        512
+                    ],
+                    "dtype": "float32"
+                },
+                "x": {
+                    "shape": [
+                        1,
+                        512
+                    ],
+                    "dtype": "int32"
+                },
+                "tone": {
+                    "shape": [
+                        1,
+                        512
+                    ],
+                    "dtype": "int32"
+                },
+                "language": {
+                    "shape": [
+                        1,
+                        512
+                    ],
+                    "dtype": "int32"
+                },
+                "x_lengths": {
+                    "shape": [
+                        1
+                    ],
+                    "dtype": "int32"
+                },
+                "noise_scale_w": {
+                    "shape": [
+                        1
+                    ],
+                    "dtype": "float32"
+                },
+                "sdp_ratio": {
+                    "shape": [
+                        1
+                    ],
+                    "dtype": "float32"
+                },
+                "length_scale": {
+                    "shape": [
+                        1
+                    ],
+                    "dtype": "float32"
+                }
+            },
+            "outputs": {
+                "m_p": {
+                    "shape": [
+                        1,
+                        192,
+                        512
+                    ],
+                    "dtype": "float32"
+                },
+                "logs_p": {
+                    "shape": [
+                        1,
+                        192,
+                        512
+                    ],
+                    "dtype": "float32"
+                },
+                "w_ceil": {
+                    "shape": [
+                        1,
+                        1,
+                        512
+                    ],
+                    "dtype": "float32"
+                },
+                "y_lengths": {
+                    "shape": [
+                        1
+                    ],
+                    "dtype": "float32"
+                },
+                "x_mask": {
+                    "shape": [
+                        1,
+                        1,
+                        512
+                    ],
+                    "dtype": "float32"
+                },
+                "g": {
+                    "shape": [
+                        1,
+                        256,
+                        1
+                    ],
+                    "dtype": "float32"
+                }
+            }
+        },
+        "flow.bin": {
+            "inputs": {
+                "attn_squeezed": {
+                    "shape": [
+                        1,
+                        1536,
+                        512
+                    ],
+                    "dtype": "uint16",
+                    "quantization_parameters": {
+                        "scale": 0.000030518509447574615,
+                        "zero_point": 32768
+                    }
+                },
+                "logs_p": {
+                    "shape": [
+                        1,
+                        192,
+                        512
+                    ],
+                    "dtype": "uint16",
+                    "quantization_parameters": {
+                        "scale": 0.00003420173015911132,
+                        "zero_point": 22619
+                    }
+                },
+                "noise_scale": {
+                    "shape": [
+                        1
+                    ],
+                    "dtype": "uint16",
+                    "quantization_parameters": {
+                        "scale": 0.000010177767762797885,
+                        "zero_point": 0
+                    }
+                },
+                "m_p": {
+                    "shape": [
+                        1,
+                        192,
+                        512
+                    ],
+                    "dtype": "uint16",
+                    "quantization_parameters": {
+                        "scale": 0.00007962718518683687,
+                        "zero_point": 34950
+                    }
+                },
+                "y_mask": {
+                    "shape": [
+                        1,
+                        1,
+                        1536
+                    ],
+                    "dtype": "uint16",
+                    "quantization_parameters": {
+                        "scale": 0.000015259021893143654,
+                        "zero_point": 0
+                    }
+                },
+                "g": {
+                    "shape": [
+                        1,
+                        256,
+                        1
+                    ],
+                    "dtype": "uint16",
+                    "quantization_parameters": {
+                        "scale": 0.000020079150999663398,
+                        "zero_point": 36547
+                    }
+                }
+            },
+            "outputs": {
+                "z": {
+                    "shape": [
+                        1,
+                        192,
+                        1536
+                    ],
+                    "dtype": "uint16",
+                    "quantization_parameters": {
+                        "scale": 0.0002904423454310745,
+                        "zero_point": 32258
+                    }
+                }
+            }
+        },
+        "decoder.bin": {
+            "inputs": {
+                "g": {
+                    "shape": [
+                        1,
+                        256,
+                        1
+                    ],
+                    "dtype": "uint16",
+                    "quantization_parameters": {
+                        "scale": 0.000020079150999663398,
+                        "zero_point": 36547
+                    }
+                },
+                "z": {
+                    "shape": [
+                        1,
+                        192,
+                        64
+                    ],
+                    "dtype": "uint16",
+                    "quantization_parameters": {
+                        "scale": 0.0002923276915680617,
+                        "zero_point": 32350
+                    }
+                }
+            },
+            "outputs": {
+                "audio": {
+                    "shape": [
+                        1,
+                        1,
+                        32768
+                    ],
+                    "dtype": "uint16",
+                    "quantization_parameters": {
+                        "scale": 0.000013067196960037109,
+                        "zero_point": 35955
+                    }
+                }
+            }
+        },
+        "bert_wrapper.bin": {
+            "inputs": {
+                "input_ids": {
+                    "shape": [
+                        1,
+                        200
+                    ],
+                    "dtype": "int32"
+                },
+                "token_type_ids": {
+                    "shape": [
+                        1,
+                        200
+                    ],
+                    "dtype": "int32"
+                },
+                "attention_mask": {
+                    "shape": [
+                        1,
+                        200
+                    ],
+                    "dtype": "int32"
+                }
+            },
+            "outputs": {
+                "hidden_states": {
+                    "shape": [
+                        1,
+                        200,
+                        768
+                    ],
+                    "dtype": "float32"
+                }
+            }
+        }
+    },
+    "supplementary_files": {
+        "bert_zh_tokenizer.bin": "tokenizer binary for BERT Chinese uncased vocabulary",
+        "bert_normalizer.bin": "optimized unicode binary for fast access",
+        "config.json": "TTS metadata JSON for Chinese"
+    },
+    "chipset_attributes": {
+        "aliases": [
+            "qualcomm-qcs9075",
+            "qcs9075",
+            "qualcomm-dragonwing-iq-9075"
+        ],
+        "marketing_name": "qualcomm-qcs9075",
+        "world": "IoT",
+        "supports_fp16": true,
+        "htp_version": 73,
+        "soc_model": 77,
+        "reference_device": "Dragonwing IQ-9075 EVK",
+        "supports_weight_sharing": true,
+        "name": "qualcomm-qcs9075"
+    }
+}

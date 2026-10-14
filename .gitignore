@@ -1,0 +1,39 @@
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Large Model Binaries (> 50MB) - GitHub rejects files > 100MB
+*.onnx
+*.dlc
+*.pth
+*.pt
+*.bin
+*.tar.gz
+*.zip
+
+# Except small metadata / npy / json if needed
+!melotts_npu/models/melotts-zh/spk_emb_neutral.npy
+
+# macOS system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary directories
+tmp/
+temp/

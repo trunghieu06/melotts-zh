@@ -1,0 +1,38 @@
+{
+    "device": "Dragonwing IQ-9075 EVK",
+    "onnx_model": "/Users/htti/Documents/Code.nosync/one-voice/melo_byte_encoder_npu.onnx",
+    "test_text": "你好，很高兴认识你。",
+    "test_bytes_length": 30,
+    "compile_job": {
+        "id": "jp2oeo14g",
+        "url": "https://workbench.aihub.qualcomm.com/jobs/jp2oeo14g/",
+        "status": "SUCCESS",
+        "options": "--target_runtime qnn_dlc --compute_unit npu"
+    },
+    "profile_job": {
+        "id": "jp3o6oylp",
+        "url": "https://workbench.aihub.qualcomm.com/jobs/jp3o6oylp/",
+        "status": "SUCCESS",
+        "latency_ms": 8.55,
+        "peak_memory_mb": 5.17578125,
+        "npu_ops": 256,
+        "total_ops": 256,
+        "cpu_ops": 0,
+        "npu_ratio_percent": 100.0
+    },
+    "inference_job": {
+        "id": "jpe6yxevg",
+        "url": "https://workbench.aihub.qualcomm.com/jobs/jpe6yxevg/",
+        "status": "SUCCESS",
+        "output_shape": [
+            1,
+            192,
+            512
+        ]
+    },
+    "accuracy_metrics": {
+        "cosine_similarity": 1.000005841255188,
+        "max_absolute_error": 0.0005240049213171005,
+        "mean_absolute_error": 5.101068745716475e-05
+    }
+}

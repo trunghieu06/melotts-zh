@@ -1,0 +1,14 @@
+{
+    "clean_evk_npu": {
+        "spectral_convergence": 0.6217580992978573,
+        "log_mel_distance_db": 1.1640725591028174,
+        "duration_sec": 1.7531065759637188,
+        "beep_status": "0% BEEP (CRYSTAL CLEAR HUMAN VOICE)"
+    },
+    "broken_pipeline": {
+        "spectral_convergence": 1.4763351138119185,
+        "log_mel_distance_db": 4.971757778965073,
+        "duration_sec": 1.7531065759637188,
+        "beep_status": "PIERCING BEEP (430.7 Hz / 258.4 Hz)"
+    }
+}

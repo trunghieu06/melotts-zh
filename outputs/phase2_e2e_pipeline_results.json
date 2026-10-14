@@ -1,0 +1,46 @@
+{
+    "status": "SUCCESS",
+    "device": "Dragonwing IQ-9075 EVK",
+    "input_text": "你好，很高兴认识你。",
+    "input_bytes": 30,
+    "stage1_encoder": {
+        "model_id": "mn44p320n",
+        "job_id": "jglwlw8lp",
+        "job_url": "https://workbench.aihub.qualcomm.com/jobs/jglwlw8lp/",
+        "hardware_latency_ms": 8.552,
+        "output_shape": [
+            1,
+            192,
+            512
+        ],
+        "npu_ratio": "100% NPU (256/256 ops)"
+    },
+    "stage2_chunking": {
+        "num_chunks": 8,
+        "chunk_shape": [
+            1,
+            192,
+            64
+        ],
+        "speaker_vector_shape": [
+            1,
+            256,
+            1
+        ]
+    },
+    "stage3_decoder": {
+        "model_id": "mmdjrj20m",
+        "job_id": "jgzznydog",
+        "job_url": "https://workbench.aihub.qualcomm.com/jobs/jgzznydog/",
+        "num_chunks_processed": 8,
+        "chunk_samples": 32768,
+        "npu_ratio": "100% NPU QNN w8a16"
+    },
+    "stage4_trimming": {
+        "raw_samples": 262144,
+        "clean_samples": 262144,
+        "sample_rate": 44100,
+        "duration_sec": 5.944308390022676
+    },
+    "output_audio_path": "/Users/htti/Documents/Code.nosync/one-voice/outputs/melo_e2e_npu.wav"
+}
