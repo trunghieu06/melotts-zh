@@ -1,8 +1,7 @@
-# Báo Cáo Kỹ Thuật Tổng Hợp: Hiện Thực Hóa Problem 1, Tiến Trình Ghép Nối NPU & Kiểm Điểm Toàn Diện Dự Án
+# Báo Cáo Kỹ Thuật Tổng Hợp: Thực Hiện Problem 1, Tiến Trình Ghép Nối NPU & Kiểm Điểm Toàn Diện Dự Án
 
 **Dự án:** OneVoice — Hệ thống Voice AI & TTS 100% NPU Qualcomm Dragonwing IQ-9075 EVK  
 **Thiết bị kiểm chứng thực tế:** Qualcomm Dragonwing IQ-9075 EVK (Hexagon HTP v73, QAIRT 2.45.0)  
-**Tiêu chí báo cáo:** **100% trung thực, nói thẳng thắn vào bản chất kỹ thuật, không ngụy biện, minh bạch toàn bộ tiến trình và sai sót.**  
 
 ---
 
@@ -124,7 +123,7 @@ Kết quả: ❌ Toàn bộ âm thanh biến thành tiếng rác hỗn loạn, k
 Để xác định chính xác lỗi do phần cứng chip Qualcomm hay do dữ liệu đầu vào, một thực nghiệm độc lập đã được tiến hành (Job: [`jp4e374qg`](https://workbench.aihub.qualcomm.com/jobs/jp4e374qg/)):
 * Trích xuất ma trận tiềm ẩn $z$ **thực sự của mô hình gốc PyTorch** nạp trực tiếp vào khối nhị phân Vocoder `decoder.bin` trên bo mạch Dragonwing IQ-9075 EVK.
 * **Kết quả phần cứng:**
-  * File âm thanh xuất ra: [`outputs/verified_clean_speech_evk.wav`](file:///Users/htti/Documents/Code.nosync/one-voice/outputs/verified_clean_speech_evk.wav).
+  * File âm thanh xuất ra: [`outputs/verified_clean_speech_evk.wav`].
   * Phân tích phổ FFT: Tần số đỉnh đo được là **249.3 Hz, 252.7 Hz, 247.0 Hz** (đúng cao độ giọng người thật $F_0$).
   * Biên độ đỉnh: dao động tự nhiên quanh mức **~2,000**.
   * **Hoàn toàn 100% sạch sẽ, không có bất kỳ tiếng bíp nào!**
@@ -188,7 +187,7 @@ Tiếng Trung là chữ tượng hình, một ký tự có thể có nhiều cá
    * Problem 4 (Trimming): **0.16 ms** (9/9 ops NPU).
    * **Tỷ lệ NPU đạt 100% (0% CPU fallback)**, tổng độ trễ toàn hệ thống đạt mức xuất sắc: **~15.4 ms** (RTF = 0.0088, nhanh gấp 113 lần thời gian thực).
 3. **Làm sạch và quy hoạch toàn bộ kho mã nguồn:**
-   * Tạo thư mục chuẩn hóa [`melotts_npu/`](file:///Users/htti/Documents/Code.nosync/one-voice/melotts_npu/), phân loại rõ ràng mô hình, báo cáo và dữ liệu kiểm chứng; loại bỏ hơn 300MB tệp rác thử nghiệm.
+   * Tạo thư mục chuẩn hóa [`melotts_npu/`], phân loại rõ ràng mô hình, báo cáo và dữ liệu kiểm chứng; loại bỏ hơn 300MB tệp rác thử nghiệm.
 
 ### ❌ Những gì CHƯA làm được:
 1. **Chưa có mô hình Byte-to-Speech hoàn chỉnh phát ra tiếng người:**  
@@ -198,29 +197,3 @@ Tiếng Trung là chữ tượng hình, một ký tự có thể có nhiều cá
 3. **Các giải pháp chắp vá (nội suy nearest, fine-tune ép shape) đều không đạt chuẩn nghe hiểu trong thực tế.**
 
 ---
-
-## 6. LỘ TRÌNH KỸ THUẬT KHẮC PHỤC CHUẨN XÁC
-
-Để dự án OneVoice đạt được chất lượng âm thanh thật và có thể demo báo cáo thương mại, có 2 hướng đi cụ thể:
-
-### Lựa Chọn A: Kiến Trúc Chuẩn Công Nghiệp (Khuyên dùng để Demo ngay)
-* **Frontend (CPU, ~2 ms):** Giữ khâu tra từ điển phiên âm G2P (Chữ Hán $\to$ Âm vị/Thanh điệu) chạy trên CPU. Khâu này cực nhẹ, chỉ chiếm 1-2% thời gian toàn hệ thống.
-* **Acoustic + Vocoder (100% NPU, ~15 ms):** Toàn bộ phần tính toán nặng gồm TextEncoder, Normalizing Flow và Vocoder HiFi-GAN chạy 100% trên HTP NPU bằng các file nhị phân chuẩn Qualcomm đã cung cấp sẵn trong [`melotts_npu/models/melotts-zh/`](file:///Users/htti/Documents/Code.nosync/one-voice/melotts_npu/models/melotts-zh/):
-  * `encoder.bin` (QNN HTP, 18.4 MB)
-  * `flow.bin` (QNN HTP, 29.7 MB)
-  * `decoder.bin` (QNN HTP, 19.3 MB)
-* **Ưu điểm:** Âm thanh chuẩn giọng người 100%, 0% tiếng bíp, độ trễ cực thấp, không cần train lại bất kỳ mô hình nào.
-
-### Lựa Chọn B: Nếu Bắt Buộc 100% Byte-to-Speech (Cần Huấn Luyện Lại Bài Bản)
-Nếu bắt buộc phải chứng minh giải pháp loại bỏ hoàn toàn từ điển G2P:
-1. **Thiết kế lại kiến trúc mô hình:**
-   * Bổ sung khối **Duration Predictor Module** độc lập nhận đầu vào từ Byte Transformer.
-   * Dùng **CTC Loss** hoặc **Monotonic Alignment Search (MAS)** để tự động học ma trận căn chỉnh giữa chuỗi Byte và khung âm thanh.
-2. **Quy trình Huấn luyện Đúng Kỹ Thuật:**
-   * **Bước 1 (Offline Caching):** Trích xuất trước toàn bộ ma trận đặc trưng ($m_p$, duration $d$, latent $z$) của 10,000 - 50,000 câu lưu sẵn ra file `.pt` một lần duy nhất (~30 phút).
-   * **Bước 2 (GPU Training):** Huấn luyện mô hình thuần túy trên GPU bằng DataLoader nạp tensor có sẵn (chỉ mất ~10-15 phút cho 50 epochs).
-   * **Bước 3 (Multi-task Loss):** $\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{acoustic}} + \lambda_1 \mathcal{L}_{\text{duration}} + \lambda_2 \mathcal{L}_{\text{CTC}}$.
-
----
-
-*Báo cáo được tổng hợp đầy đủ và lưu trữ vĩnh viễn tại tệp:* [`BAO_CAO_TONG_HOP_ONEVOICE_NPU.md`](file:///Users/htti/Documents/Code.nosync/one-voice/BAO_CAO_TONG_HOP_ONEVOICE_NPU.md).

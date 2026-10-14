@@ -1,10 +1,10 @@
-# Báo Cáo Đánh Giá & Kế Hoạch Toàn Diện: Triệt Tiêu Tiếng Bíp & Ghép Nối 100% NPU MeloTTS
+# Báo Cáo Đánh Giá : Giải quyết bài toán đưa Tokenizer lên NPU
 
-**Tác giả:** Antigravity AI Pair Programmer & OneVoice Team  
+**Tác giả:** Trần Trung Hiếu \
 **Thiết bị kiểm chứng:** Qualcomm Dragonwing IQ-9075 EVK (Hexagon HTP v73, QAIRT 2.45.0)  
-**Tệp âm thanh kiểm chứng thực tế:** [`outputs/melo_npu_evk_clean_final.wav`](file:///Users/htti/Documents/Code.nosync/one-voice/outputs/melo_npu_evk_clean_final.wav)  
-**Tệp âm thanh tham chiếu FP32:** [`outputs/reference_fp32_melo.wav`](file:///Users/htti/Documents/Code.nosync/one-voice/outputs/reference_fp32_melo.wav)  
-**Tệp âm thanh bị lỗi trước đó (đối soát):** [`outputs/melo_optionA_snapdragon.wav`](file:///Users/htti/Documents/Code.nosync/one-voice/outputs/melo_optionA_snapdragon.wav)  
+**Tệp âm thanh kiểm chứng thực tế:** [`outputs/melo_npu_evk_clean_final.wav`] \
+**Tệp âm thanh tham chiếu FP32:** [`outputs/reference_fp32_melo.wav`] \
+**Tệp âm thanh bị lỗi trước đó (đối soát):** [`outputs/melo_optionA_snapdragon.wav`] \
 
 ---
 
