@@ -97,7 +97,9 @@ add_md('''## Bước 3 (GIAI ĐOẠN 0): Kiểm Định Teacher & Chốt Cấu H
   3. Đo năng lượng nền khi đưa $z=0$ vào Vocoder (in giá trị dB thật).
   4. Nghe thử câu đối chứng `teacher_baseline.wav`.''')
 
-add_code('''import ssl
+add_code('''import warnings
+warnings.filterwarnings("ignore")
+import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 from melo.api import TTS
 import soundfile as sf
@@ -112,7 +114,7 @@ teacher.model.eval()
 teacher.model.requires_grad_(False)
 
 # 1. Khóa đúng Speaker ID của tiếng Trung
-sid = teacher.hps.data.spk2id.get("ZH", 1)
+sid = getattr(teacher.hps.data.spk2id, "ZH", 1)
 print(f"✅ Speaker ID chuẩn cho tiếng Trung: sid = {sid}")
 g_neutral = teacher.model.emb_g(torch.tensor([sid])).unsqueeze(-1).detach()
 
