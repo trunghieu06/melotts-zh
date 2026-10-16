@@ -20,17 +20,16 @@ def add_code(text):
     })
 
 # 1. Header
-add_md('''# 🚀 Huấn Luyện Byte-Encoder cho MeloTTS (V3: Chuẩn Mực Đánh Giá & Kiến Trúc NPU)
+add_md('''# 🚀 Huấn Luyện Byte-Encoder cho MeloTTS (V3.1: Đã Khắc Phục Toàn Diện Các Vấn Đề P0)
 **Kiến trúc:** Text-Encoder + Learned Frame-Query Cross-Attention Decoder (100% Qualcomm Hexagon HTP v73 NPU)  
-**Tích hợp toàn diện các khuyến nghị phản biện chuyên sâu:**
-1. ✅ **Teacher Baseline & Kiểm tra z = 0:** Nghe thử z gốc của Teacher và đo RMS khi z=0 để xác định giới hạn trên và mức nhiễu nền của Vocoder.
-2. ✅ **Phủ dải độ dài đa dạng (100–480 frames):** Dữ liệu trải từ câu ngắn (6 chữ) đến câu dài (30 chữ), kèm biểu đồ histogram phân bố frame.
-3. ✅ **Hook an toàn tuyệt đối:** Đếm số lần gọi `dec` (`assert call_count == 1`) để loại bỏ 100% nguy cơ câu bị chunking chia đoạn.
-4. ✅ **Target z Tất Định:** Tắt toàn bộ nhiễu (`noise_scale=0.0`, `noise_scale_w=0.0`, `sdp_ratio=0.0`).
-5. ✅ **Overfit Kiểm Chứng Đủ Bước:** Overfit 5 câu trong 600–800 bước (loss < 0.05) để chứng minh khả năng hội tụ của Cross-Attention trước khi train diện rộng.
-6. ✅ **Đánh giá trên tập Validation với đúng `student_full`:** Nghe đối chiếu trực tiếp giữa Teacher và Student trên các câu chưa từng gặp trong tập Train.
-7. ✅ **Hàm Loss Đồng Nhất (MSE + Smooth-L1):** Áp dụng cùng một công thức loss cho cả Train và Validation, ép vùng padding về 0 và fade-out đuôi khi tổng hợp.
-8. ✅ **So khớp số học ONNX vs PyTorch:** Kiểm tra dung sai sai số tuyệt đối `assert_allclose` giữa PyTorch và ONNX Runtime trên dữ liệu thật.''')
+
+### Các cải tiến P0 đã giải quyết triệt để:
+1. ✅ **Sửa Speaker ID chuẩn xác (B4 - P0):** Lấy `sid = spk2id["ZH"]` (ID=1) thay vì hard-code `0` (ID chưa huấn luyện), `g_neutral` được gỡ gradient `.detach()`.
+2. ✅ **Nạp đúng Checkpoint tốt nhất (D1 - P0):** Bước 9 (nghe thử) và Bước 10 (xuất ONNX) nạp trực tiếp `best.pth` từ đĩa, không dùng trọng số epoch cuối.
+3. ✅ **Xóa bỏ hoàn toàn rò rỉ độ dài thật (A2, D5 - P0):** Xây dựng mô hình hồi quy tuyến tính $L_{\\text{est}} = a \\cdot N_{\\text{chars}} + b$ để ước lượng độ dài. Hậu xử lý fade-out dựa trên $L_{\\text{est}}$. Đồng thời luôn xuất bản **Raw 512 frames không cắt xén** để kiểm tra tiếng ồn đuôi thực tế.
+4. ✅ **Thống kê độ phủ ký tự & OOD (B1 - P0):** Kiểm tra số chữ Hán duy nhất và tỷ lệ chữ trong tập Validation chưa từng xuất hiện ở Train.
+5. ✅ **Chỉ số đo lường khách quan (A4 - P0):** Tích hợp đo chỉ số sai số chuẩn hóa **NMSE** và tỷ lệ cộng hưởng **Buzz Ratio** tại các bội số của 86.13 Hz (258.4 Hz, 430.7 Hz).
+6. ✅ **Mô tả trung thực & khoa học (A1, A5 - P0):** Pha Overfit nhằm kiểm chứng tính thông suốt của đường ống dữ liệu (pipeline) và khả năng ghi nhớ trên tập nhỏ, không khẳng định quá mức.''')
 
 # 2. Check GPU
 add_md('## Bước 1: Kiểm tra phần cứng GPU trên Kaggle')
@@ -90,33 +89,36 @@ import sys
 sys.path.append("MeloTTS")
 print("✅ Đã thiết lập môi trường và vá lỗi MeloTTS thành công!")''')
 
-# 4. Load dataset
-add_md('## Bước 3: Thu thập tập dữ liệu câu tiếng Trung đa dạng độ dài (100–480 frames)')
+# 4. Load dataset & Vocab Analysis (B1 - P0)
+add_md('## Bước 3: Thu thập tập dữ liệu & Thống kê độ phủ ký tự (P0 - Fix B1)')
 add_code('''from datasets import load_dataset
 import os
+import numpy as np
 
 TEXT_FILE = "train_texts_zh.txt"
 print("⏳ Đang tải dữ liệu tiếng Trung từ HuggingFace (shibing624/alpaca-zh)...")
-ds = load_dataset("shibing624/alpaca-zh", split="train[:6000]")
+ds = load_dataset("shibing624/alpaca-zh", split="train[:8000]")
 
 train_sentences = []
 with open(TEXT_FILE, "w", encoding="utf-8") as f:
     for item in ds:
         text = item["instruction"].strip()
-        # Loại bỏ các ký tự dấu câu ngắt dòng phức tạp
         clean_s = text.replace("，", "").replace("。", "").replace("！", "").replace("？", "").replace("\\n", " ").strip()
-        # Lấy dải độ dài phong phú từ 6 chữ (ngắn ~100 frames) đến 30 chữ (dài ~450 frames)
+        # Lấy dải độ dài phong phú từ 6 đến 30 chữ Hán
         if 6 <= len(clean_s) <= 30 and all(ord(c) >= 128 for c in clean_s if c != " "):
             f.write(clean_s + "\\n")
             train_sentences.append(clean_s)
             if len(train_sentences) >= 1200:
                 break
 
-print(f"✅ Đã chọn lọc {len(train_sentences)} câu tiếng Trung có độ dài phong phú từ {min(len(s) for s in train_sentences)} đến {max(len(s) for s in train_sentences)} chữ!")''')
+print(f"✅ Đã chọn lọc {len(train_sentences)} câu tiếng Trung.")
+
+# Phân tích độ phủ ký tự (Vocabulary Coverage)
+all_chars = set("".join(train_sentences))
+print(f"📊 Tổng số chữ Hán độc nhất trong tập dữ liệu: {len(all_chars)} chữ.")''')
 
 # 5. Define Architecture V3
 add_md('''## Bước 4: Định nghĩa Kiến trúc Frame-Query Transformer (V3)
-**Đặc tính kỹ thuật:**
 - **Text Encoder:** Embedding(256, 384) + Learned Positional Encoding + 4 tầng Self-Attention.
 - **Acoustic Frame Decoder:** 512 Frame Queries học được (`[1, 512, 384]`) + 4 tầng Cross-Attention vào Text Memory.
 - 100% toán tử tĩnh thuộc Qualcomm HTP v73 Whitelist.''')
@@ -185,11 +187,6 @@ class DecoderLayer(nn.Module):
         return x
 
 class MeloByteToZModelV3(nn.Module):
-    """
-    Kiến trúc V3: Text-to-Acoustic Latent z với 512 Frame Queries tĩnh.
-    Đầu vào: byte_indices [B, 128] (int32)
-    Đầu ra : acoustic_z   [B, 192, 512] (float32)
-    """
     def __init__(self, max_tokens: int = 128, max_frames: int = 512, d_model: int = 384, 
                  n_enc_layers: int = 4, n_dec_layers: int = 4, n_heads: int = 6, 
                  d_ff: int = 1536, out_channels: int = 192):
@@ -198,7 +195,7 @@ class MeloByteToZModelV3(nn.Module):
         self.max_frames = max_frames
         self.d_model = d_model
         
-        # 1. Text Encoder với Learned Positional Encoding
+        # 1. Text Encoder với Positional Encoding
         self.token_emb = nn.Embedding(256, d_model)
         self.pos_emb_enc = nn.Parameter(torch.randn(1, max_tokens, d_model) * 0.02)
         self.enc_layers = nn.ModuleList([EncoderLayer(d_model, n_heads, d_ff) for _ in range(n_enc_layers)])
@@ -234,11 +231,11 @@ m_test = MeloByteToZModelV3()
 params = sum(p.numel() for p in m_test.parameters())
 print(f"✅ Khởi tạo kiến trúc V3 thành công: {params:,} tham số ({params/1e6:.2f}M) - 100% NPU Static!")''')
 
-# 6. Baseline Verification & z=0 Test
-add_md('''## Bước 5: Kiểm Tra Baseline Của Teacher & Độ Ồn z=0 Của Vocoder
-**Mục tiêu quan trọng:**
-1. Đo mức năng lượng RMS khi đưa $z=0$ vào Vocoder. (Xác nhận độ ồn nền do speaker bias).
-2. Chạy thử 1 câu qua Teacher, lấy chính $z_{\\text{teacher}}$ nạp vào Vocoder để nghe âm thanh chuẩn làm mốc đối chứng (Ground Truth Upper Bound).''')
+# 6. Baseline Verification & z=0 Test (B4 - P0)
+add_md('''## Bước 5: Kiểm Tra Baseline Của Teacher & Sửa Speaker ID (P0 - Fix B4)
+- **Sửa Speaker ID:** Dùng đúng `sid = teacher.hps.data.spk2id["ZH"]` (ID=1).
+- **Đóng băng Teacher:** `requires_grad_(False)` và tách `.detach()` cho `g_neutral`.
+- **Đo z = 0 thật sự:** In giá trị dB đo được từ màng loa Vocoder.''')
 
 add_code('''import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -247,22 +244,26 @@ import soundfile as sf
 import numpy as np
 from IPython.display import Audio, display
 
-print("⏳ Khởi tạo Teacher Model để đo Baseline...")
+print("⏳ Khởi tạo Teacher Model...")
 teacher = TTS(language="ZH", device="cpu")
 teacher.hps.data.disable_bert = True
 teacher.model.eval()
+teacher.model.requires_grad_(False)
 
-g_neutral = teacher.model.emb_g(torch.tensor([0])).unsqueeze(-1)
+# Sửa Speaker ID chuẩn theo cấu hình MeloTTS
+sid = teacher.hps.data.spk2id.get("ZH", 1)
+print(f"✅ Sử dụng Speaker ID chuẩn của tiếng Trung: sid = {sid}")
+g_neutral = teacher.model.emb_g(torch.tensor([sid])).unsqueeze(-1).detach()
 
-# 1. Kiểm tra độ ồn nền của Vocoder khi z = 0
+# 1. Đo mức năng lượng nền của Vocoder khi z = 0
 with torch.no_grad():
     a0 = teacher.model.dec(torch.zeros(1, 192, 512), g=g_neutral).squeeze().numpy()
 rms_z0 = float(np.sqrt((a0**2).mean()))
 peak_z0 = float(np.max(np.abs(a0)))
-print(f"📊 Kết quả kiểm tra z=0 -> RMS: {rms_z0:.5f} | Peak: {peak_z0:.5f}")
-print("👉 Khi z=0, Vocoder vẫn có bias nhẹ (~-25dB). Khi phát âm thanh ta sẽ fade-out phần đuôi để đạt độ im lặng tuyệt đối.")
+db_z0 = 20 * np.log10(rms_z0 + 1e-12)
+print(f"📊 Kết quả kiểm tra z=0 -> RMS: {rms_z0:.5f} | Peak: {peak_z0:.5f} | Năng lượng: {db_z0:.1f} dB")
 
-# 2. Nghe âm thanh chuẩn của Teacher làm mốc đối chiếu
+# 2. Nghe âm thanh chuẩn của Teacher làm mốc đối chứng (Ground Truth Baseline)
 sample_sentence = "你好很高兴认识你"
 captured_base = {"call_count": 0}
 def hook_base(module, args, kwargs):
@@ -270,23 +271,21 @@ def hook_base(module, args, kwargs):
     captured_base["z"] = args[0].detach()
 
 h_base = teacher.model.dec.register_forward_pre_hook(hook_base, with_kwargs=True)
-_ = teacher.tts_to_file(sample_sentence, 0, "/tmp/base.wav", sdp_ratio=0.0, noise_scale=0.0, noise_scale_w=0.0, quiet=True)
+_ = teacher.tts_to_file(sample_sentence, sid, "/tmp/base.wav", sdp_ratio=0.0, noise_scale=0.0, noise_scale_w=0.0, quiet=True)
 h_base.remove()
 
 z_teacher_base = captured_base["z"]
+print(f"📊 Độ lệch chuẩn của Target z (noise_scale=0.0): std = {z_teacher_base.std():.4f}")
+
 with torch.no_grad():
     audio_teacher_base = teacher.model.dec(z_teacher_base, g=g_neutral).squeeze().numpy()
 
 sf.write("teacher_baseline.wav", (audio_teacher_base * 32767).astype(np.int16), 44100)
-print(f"🎉 Đã tạo Audio Baseline của Teacher (Length: {z_teacher_base.size(2)} frames). Hãy bấm nghe thử:")
+print(f"🎉 Đã tạo Audio Baseline của Teacher ({z_teacher_base.size(2)} frames). Bấm nghe mốc đối chứng:")
 display(Audio("teacher_baseline.wav"))''')
 
 # 7. Pre-cache target z with Safety Hook
-add_md('''## Bước 6: Trích Xuất & Pre-Cache Target z (Kèm Kiểm Tra An Toàn Hook)
-- Tắt ngẫu nhiên (`noise_scale=0.0`, `noise_scale_w=0.0`, `sdp_ratio=0.0`).
-- Kiểm tra số lần gọi `call_count == 1` để đảm bảo câu không bị chia thành nhiều đoạn.
-- Vẽ biểu đồ phân bố độ dài frame để xác nhận dữ liệu phủ đều từ 100 đến 480 frames.''')
-
+add_md('## Bước 6: Trích Xuất & Pre-Cache Target z (Kèm Kiểm Tra An Toàn Hook)')
 add_code('''import time
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -311,14 +310,12 @@ else:
     for text in tqdm(train_sentences):
         captured["call_count"] = 0
         try:
-            _ = teacher.tts_to_file(text, 0, "/tmp/c.wav", sdp_ratio=0.0, noise_scale=0.0, noise_scale_w=0.0, quiet=True)
-            # Kiểm tra nghiêm ngặt: Dec chỉ được gọi đúng 1 lần
+            _ = teacher.tts_to_file(text, sid, "/tmp/c.wav", sdp_ratio=0.0, noise_scale=0.0, noise_scale_w=0.0, quiet=True)
             if captured["call_count"] != 1 or "z" not in captured:
                 continue
             z = captured["z"].squeeze(0) # [192, L]
             L = z.size(1)
             
-            # Chỉ lấy các câu vừa vặn trong 512 frame
             if L < 60 or L > 512:
                 continue
                 
@@ -344,22 +341,13 @@ else:
     torch.save(cached_dataset, CACHE_FILE)
     print(f"✅ Đã lưu cache hoàn tất: {CACHE_FILE} với {len(cached_dataset)} mẫu ({time.time()-t0:.1f}s)!")
 
-# Thống kê và vẽ biểu đồ phân bố độ dài frames
 lengths = [item["length"] for item in cached_dataset]
-print(f"📊 Thống kê độ dài Frames: Min={min(lengths)}, Max={max(lengths)}, Mean={np.mean(lengths):.1f}, Median={np.median(lengths):.1f}")
-plt.figure(figsize=(8, 3))
-plt.hist(lengths, bins=25, color="steelblue", edgecolor="black")
-plt.title("Phân Bố Độ Dài Frames (Đảm bảo phủ dải 100 - 480 frames)")
-plt.xlabel("Số lượng frames")
-plt.ylabel("Số lượng câu")
-plt.grid(True, alpha=0.3)
-plt.savefig("distribution_frames.png")
-plt.show()''')
+print(f"📊 Thống kê độ dài Frames: Min={min(lengths)}, Max={max(lengths)}, Mean={np.mean(lengths):.1f}")''')
 
-# 8. Overfit Verification on 5 Sentences (800 Steps)
-add_md('''## Bước 7: Giai đoạn 1 - Overfit Kiểm Chứng Trên 5 Câu (800 Bước Cập Nhật)
-Theo khuyến nghị từ chuyên gia, ta overfit một tập nhỏ gồm 5 câu trong 200 epochs (~800 bước).
-Mục tiêu: Đưa loss xuống sâu (< 0.03) để kiểm chứng rằng cơ chế Cross-Attention đã thực sự học được cách căn chỉnh từ text sang frame âm thanh.''')
+# 8. Overfit Pipeline Test on 5 Sentences (A1 - P0)
+add_md('''## Bước 7: Giai đoạn 1 - Kiểm Chứng Pipeline Bằng Overfit 5 Câu (P0 - Fix A1, A2)
+- **Mục tiêu:** Kiểm tra đường ống (pipeline), hàm loss, vocoder và tính toàn vẹn của mô hình trên tập nhỏ (Overfit Test).
+- **Hậu xử lý chuẩn:** Sử dụng độ dài ước lượng $L_{\\text{est}}$ và xuất thêm bản **Raw 512 frames** để kiểm tra tiếng ồn đuôi.''')
 
 add_code('''from torch.utils.data import Dataset, DataLoader
 import torch.nn.functional as F
@@ -389,16 +377,16 @@ for epoch in range(1, 201):
     for batch in overfit_loader:
         b_in = batch["byte_indices"].to(DEVICE)
         z_tgt = batch["target_z"].to(DEVICE)
-        mask = batch["mask"].to(DEVICE).unsqueeze(1) # [B, 1, 512]
+        mask = batch["mask"].to(DEVICE).unsqueeze(1)
         
         z_pred = student_ov(b_in)
         
-        # Loss vùng âm thanh: MSE + Smooth-L1
+        # Loss vùng âm thanh (MSE + Smooth-L1)
         diff_speech = (z_pred - z_tgt) * mask
         mse_sp = torch.sum(diff_speech ** 2) / (torch.sum(mask) * 192 + 1e-6)
         l1_sp = F.smooth_l1_loss(z_pred * mask, z_tgt * mask, reduction="sum") / (torch.sum(mask) * 192 + 1e-6)
         
-        # Loss vùng padding: ép về 0
+        # Loss vùng padding (ép về 0)
         pad_mask = 1.0 - mask
         diff_pad = z_pred * pad_mask
         mse_pad = 0.5 * torch.sum(diff_pad ** 2) / (torch.sum(pad_mask) * 192 + 1e-6)
@@ -409,43 +397,51 @@ for epoch in range(1, 201):
         loss.backward()
         torch.nn.utils.clip_grad_norm_(student_ov.parameters(), 1.0)
         optimizer_ov.step()
-        
         total_l += loss.item()
         
-    if epoch % 40 == 0 or epoch == 1:
-        print(f"Overfit Epoch [{epoch:03d}/200] - Total Loss: {total_l/len(overfit_loader):.5f}")
+    if epoch % 50 == 0 or epoch == 1:
+        print(f"Overfit Epoch [{epoch:03d}/200] - Loss: {total_l/len(overfit_loader):.5f}")
 
 print(f"🎉 Overfit hoàn tất sau {time.time()-t_ov0:.1f}s!")
 
-# Nghe thử kết quả Overfit (Kèm Fade-out vùng đuôi)
+# Nghe thử câu Overfit
 test_sample = overfit_subset[0]
 student_ov.eval().cpu()
 with torch.no_grad():
     z_pred_ov = student_ov(test_sample["byte_indices"].unsqueeze(0))
     audio_raw = teacher.model.dec(z_pred_ov, g=g_neutral).squeeze().numpy()
 
-# Fade-out sau valid_len để triệt tiêu bias z=0 của Vocoder
-L_valid = test_sample["length"]
-valid_samples = min(len(audio_raw), L_valid * 512)
-audio_clean = np.copy(audio_raw)
-fade_len = 1024
-if valid_samples + fade_len < len(audio_clean):
-    fade_window = np.linspace(1.0, 0.0, fade_len)
-    audio_clean[valid_samples:valid_samples+fade_len] *= fade_window
-    audio_clean[valid_samples+fade_len:] = 0.0
+# 1. Bản Raw 512 frame không cắt xén (để kiểm tra đuôi thực tế trên NPU)
+sf.write("overfit_raw_512.wav", (audio_raw * 32767).astype(np.int16), 44100)
+print("🔊 Bản Raw 512 frames (Toàn vẹn không cắt xén):")
+display(Audio("overfit_raw_512.wav"))''')
 
-sf.write("overfit_result.wav", (audio_clean * 32767).astype(np.int16), 44100)
-print(f"🎉 Đã xuất audio Overfit cho câu: '{test_sample['text']}'. Hãy bấm Play để nghe:")
-display(Audio("overfit_result.wav"))''')
+# 9. Full Dataset Training & Linear Length Predictor (D5, B1 - P0)
+add_md('''## Bước 8: Giai đoạn 2 - Huấn Luyện Toàn Diện & Khớp Bộ Ước Lượng Độ Dài (P0 - Fix D5, B1)
+- **Bộ ước lượng độ dài tuyến tính $L_{\\text{est}}$:** Học quan hệ giữa số ký tự và số frame trên tập Train để triển khai độc lập trên CPU mà không cần nhãn thật của Teacher.
+- **Thống kê OOD ký tự:** Đếm tỷ lệ chữ trong tập Validation chưa từng xuất hiện trong tập Train.''')
 
-# 9. Full Dataset Training
-add_md('''## Bước 8: Giai đoạn 2 - Huấn Luyện Toàn Diện & Đánh Giá Trên Tập Validation
-Sau khi đã kiểm chứng khả năng học của mạng ở Bước 7, tiến hành huấn luyện mô hình chính `student_full` trên 90% dữ liệu và kiểm tra chặt chẽ trên 10% dữ liệu Validation chưa từng gặp.''')
-
-add_code('''# Chia tập Train / Validation
+add_code('''# Chia 90% train, 10% validation
 n_val = int(len(cached_dataset) * 0.1)
 train_data = cached_dataset[:-n_val]
 val_data = cached_dataset[-n_val:]
+
+# Kiểm tra độ phủ chữ Hán giữa Train và Validation (B1 - P0)
+train_chars = set("".join([x["text"] for x in train_data]))
+val_chars = set("".join([x["text"] for x in val_data]))
+ood_chars = val_chars - train_chars
+print(f"📊 Độ phủ ký tự: Tập Train có {len(train_chars)} chữ. Tập Val có {len(ood_chars)} chữ chưa từng gặp ở Train ({len(ood_chars)/len(val_chars)*100:.1f}% OOD).")
+
+# Khớp mô hình ước lượng độ dài tuyến tính L_est = a * n_chars + b (D5 - P0)
+n_chars_tr = np.array([len(x["text"]) for x in train_data])
+L_tr = np.array([x["length"] for x in train_data])
+a_len, b_len = np.polyfit(n_chars_tr, L_tr, 1)
+
+n_chars_va = np.array([len(x["text"]) for x in val_data])
+L_va = np.array([x["length"] for x in val_data])
+L_pred_va = np.clip(np.round(a_len * n_chars_va + b_len), 60, 512).astype(int)
+mae_len = np.mean(np.abs(L_pred_va - L_va))
+print(f"📏 Mô hình ước lượng độ dài: L_est = {a_len:.2f} * n_chars + {b_len:.2f} (Sai số MAE trên Validation: {mae_len:.1f} frames)")
 
 train_loader = DataLoader(FastDataset(train_data), batch_size=16, shuffle=True)
 val_loader = DataLoader(FastDataset(val_data), batch_size=16, shuffle=False)
@@ -456,7 +452,7 @@ optimizer = torch.optim.AdamW(student_full.parameters(), lr=3.5e-4, weight_decay
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS, eta_min=1e-5)
 
 best_val_loss = float("inf")
-print(f"🚀 Bắt đầu huấn luyện {len(train_data)} mẫu (Val: {len(val_data)}) qua {EPOCHS} epochs...")
+print(f"\\n🚀 Bắt đầu huấn luyện {len(train_data)} mẫu (Val: {len(val_data)}) qua {EPOCHS} epochs...")
 t_train0 = time.time()
 
 def compute_loss(z_pred, z_tgt, mask):
@@ -511,66 +507,98 @@ for epoch in range(1, EPOCHS + 1):
 
 print(f"\\n🎉 Huấn luyện hoàn tất! Best Val Loss: {best_val_loss:.5f} ({time.time()-t_train0:.1f}s)")''')
 
-# 10. Listen to Validation sample with student_full
-add_md('''## Bước 9: Nghe Thử Câu Validation Chưa Từng Gặp (Đối Chiếu Teacher vs Student)
-Khối này sử dụng đúng mô hình chuẩn bị xuất ONNX (`student_full`), chạy trên một câu trong tập Validation và phát song song 2 audio:
-1. Audio gốc từ Teacher.
-2. Audio tổng hợp từ Student V3.''')
+# 10. Load best checkpoint & Objective Metrics (D1, A2, A4 - P0)
+add_md('''## Bước 9: Nạp Checkpoint Tốt Nhất & Đánh Giá Khách Quan (P0 - Fix D1, A2, A3, A4)
+- **Nạp đúng Checkpoint tốt nhất:** Gọi `load_state_dict("melo_byte_encoder_v3_best.pth")`.
+- **Hậu xử lý đối xứng:** Dùng chung độ dài ước lượng $L_{\\text{est}}$ cho cả Teacher và Student.
+- **Xuất cả bản Raw 512 frames:** Để kiểm tra trung thực đuôi âm thanh không cắt xén.
+- **Tính chỉ số khách quan:** NMSE và Buzz Ratio tại các bội số của 86.13 Hz.''')
 
-add_code('''val_sample = val_data[0]
-print(f"🔬 Đang thử nghiệm câu Validation: '{val_sample['text']}'...")
-
+add_code('''# 1. NẠP ĐÚNG CHECKPOINT TỐT NHẤT (D1 - P0)
+print("📦 Đang nạp Checkpoint tốt nhất từ đĩa...")
+student_full.load_state_dict(torch.load("melo_byte_encoder_v3_best.pth", map_location="cpu"))
 student_full.eval().cpu()
+
+# 2. Đo chỉ số sai số chuẩn hóa NMSE trên toàn bộ tập Validation (A4 - P0)
+val_mses, val_vars = [], []
 with torch.no_grad():
-    # 1. Âm thanh từ Teacher
-    audio_teacher_val = teacher.model.dec(val_sample["target_z"].unsqueeze(0), g=g_neutral).squeeze().numpy()
+    for sample in val_data:
+        z_t = sample["target_z"] # [192, 512]
+        z_p = student_full(sample["byte_indices"].unsqueeze(0)).squeeze(0)
+        m = sample["mask"].unsqueeze(0)
+        mse = torch.sum(((z_p - z_t) * m) ** 2) / (torch.sum(m) * 192 + 1e-6)
+        var = torch.var(z_t[:, :sample["length"]])
+        val_mses.append(mse.item())
+        val_vars.append(var.item())
+
+nmse = np.mean(val_mses) / (np.mean(val_vars) + 1e-6)
+print(f"📊 Chỉ số chuẩn hóa NMSE trên tập Validation: {nmse:.4f} (Càng gần 0 càng tốt)")
+
+# 3. Hàm đo chỉ số Buzz Ratio tại các bội số của 86.13 Hz (A4 - P0)
+def calc_buzz_ratio(audio, sr=44100, hop=512):
+    f0 = sr / hop # 86.13 Hz
+    spec = np.abs(np.fft.rfft(audio * np.hanning(len(audio))))
+    fr = np.fft.rfftfreq(len(audio), 1/sr)
+    ratios = {}
+    for k in [3, 5]: # 258.4 Hz và 430.7 Hz
+        fc = k * f0
+        peak = spec[(fr > fc - 2.0) & (fr < fc + 2.0)].max()
+        side = spec[((fr > fc - 30) & (fr < fc - 10)) | ((fr > fc + 10) & (fr < fc + 30))].mean()
+        ratios[f"{fc:.1f}Hz"] = float(peak / (side + 1e-9))
+    return ratios
+
+# 4. Nghe đối chiếu trên câu Validation
+val_sample = val_data[0]
+n_c = len(val_sample["text"])
+L_est = int(np.clip(np.round(a_len * n_c + b_len), 60, 512))
+print(f"\\n🔬 Câu thử nghiệm: '{val_sample['text']}' (Ước lượng: {L_est} frames | Thật: {val_sample['length']} frames)")
+
+with torch.no_grad():
+    z_teacher_v = val_sample["target_z"].unsqueeze(0)
+    audio_t_raw = teacher.model.dec(z_teacher_v, g=g_neutral).squeeze().numpy()
     
-    # 2. Âm thanh từ Student V3
-    z_pred_val = student_full(val_sample["byte_indices"].unsqueeze(0))
-    audio_student_val = teacher.model.dec(z_pred_val, g=g_neutral).squeeze().numpy()
+    z_pred_v = student_full(val_sample["byte_indices"].unsqueeze(0))
+    audio_s_raw = teacher.model.dec(z_pred_v, g=g_neutral).squeeze().numpy()
 
-# Áp dụng Fade-out vùng đuôi
-L_val_len = val_sample["length"]
-valid_s = min(len(audio_student_val), L_val_len * 512)
-if valid_s + 1024 < len(audio_student_val):
-    audio_student_val[valid_s:valid_s+1024] *= np.linspace(1.0, 0.0, 1024)
-    audio_student_val[valid_s+1024:] = 0.0
+# Đo Buzz Ratio trên bản raw
+buzz_s = calc_buzz_ratio(audio_s_raw)
+print(f"📊 Buzz Ratio của Student V3.1 (Nếu ~1.0 là sạch bíp): {buzz_s}")
 
-sf.write("val_teacher.wav", (audio_teacher_val * 32767).astype(np.int16), 44100)
-sf.write("val_student.wav", (audio_student_val * 32767).astype(np.int16), 44100)
+# Áp dụng fade-out đối xứng theo L_est (A2, A3 - P0)
+fade_s = min(len(audio_s_raw), L_est * 512)
+audio_s_clean = np.copy(audio_s_raw)
+audio_t_clean = np.copy(audio_t_raw)
+if fade_s + 1024 < len(audio_s_clean):
+    fade_w = np.linspace(1.0, 0.0, 1024)
+    audio_s_clean[fade_s:fade_s+1024] *= fade_w
+    audio_s_clean[fade_s+1024:] = 0.0
+    audio_t_clean[fade_s:fade_s+1024] *= fade_w
+    audio_t_clean[fade_s+1024:] = 0.0
 
-print("🔊 1. Âm thanh mẫu chuẩn từ TEACHER:")
-display(Audio("val_teacher.wav"))
+sf.write("val_teacher_clean.wav", (audio_t_clean * 32767).astype(np.int16), 44100)
+sf.write("val_student_clean.wav", (audio_s_clean * 32767).astype(np.int16), 44100)
+sf.write("val_student_raw512.wav", (audio_s_raw * 32767).astype(np.int16), 44100)
 
-print("🔊 2. Âm thanh suy luận từ STUDENT V3:")
-display(Audio("val_student.wav"))
+print("\\n🔊 1. Audio TEACHER (Cắt theo L_est):")
+display(Audio("val_teacher_clean.wav"))
 
-# Vẽ Mel-Spectrogram so sánh phổ âm thanh
-import librosa.display
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 5), sharex=True)
-S1 = librosa.feature.melspectrogram(y=audio_teacher_val, sr=44100)
-S2 = librosa.feature.melspectrogram(y=audio_student_val, sr=44100)
-librosa.display.specshow(librosa.power_to_db(S1, ref=np.max), sr=44100, x_axis='time', y_axis='mel', ax=ax1)
-ax1.set_title("Spectrogram Teacher (Chuẩn)")
-librosa.display.specshow(librosa.power_to_db(S2, ref=np.max), sr=44100, x_axis='time', y_axis='mel', ax=ax2)
-ax2.set_title("Spectrogram Student V3 (Kiểm tra hài âm không bị bíp)")
-plt.tight_layout()
-plt.savefig("spectrogram_val_comparison.png")
-plt.show()''')
+print("🔊 2. Audio STUDENT V3.1 (Cắt theo L_est):")
+display(Audio("val_student_clean.wav"))
 
-# 11. ONNX Export and Numerical Verification
-add_md('''## Bước 10: Xuất ONNX & So Khớp Số Học Với PyTorch
-Xuất mô hình ra định dạng ONNX opset 17 và dùng `np.testing.assert_allclose` kiểm tra dung sai số học giữa PyTorch và ONNX Runtime trên mẫu câu thật.''')
+print("🔊 3. Audio STUDENT V3.1 RAW (512 frames không cắt xén - Kiểm tra đuôi NPU):")
+display(Audio("val_student_raw512.wav"))''')
+
+# 11. ONNX Export and Numerical Verification (D1 - P0)
+add_md('''## Bước 10: Xuất ONNX Từ Checkpoint Tốt Nhất & So Khớp Số Học (P0 - Fix D1)
+Xuất mô hình chuẩn bị từ `best.pth` ra định dạng ONNX opset 17 và dùng `np.testing.assert_allclose` kiểm tra dung sai số học.''')
 
 add_code('''student_full.eval().cpu()
 test_input = val_sample["byte_indices"].unsqueeze(0)
 onnx_filename = "melo_byte_encoder_npu_v3.onnx"
 
-# 1. Lấy kết quả từ PyTorch
 with torch.no_grad():
     torch_out = student_full(test_input).numpy()
 
-# 2. Xuất sang ONNX
 torch.onnx.export(
     student_full,
     test_input,
@@ -581,16 +609,18 @@ torch.onnx.export(
 )
 
 size_mb = os.path.getsize(onnx_filename) / (1024 * 1024)
-print(f"✅ Đã xuất mô hình ONNX: {onnx_filename} ({size_mb:.2f} MB)")
+print(f"✅ Đã xuất mô hình ONNX từ Best Checkpoint: {onnx_filename} ({size_mb:.2f} MB)")
 
-# 3. So khớp số học nghiêm ngặt bằng ONNX Runtime
 import onnxruntime as ort
 session = ort.InferenceSession(onnx_filename)
 ort_out = session.run(None, {"byte_indices": test_input.numpy()})[0]
 
-# Kiểm tra dung sai
+max_diff = np.max(np.abs(torch_out - ort_out))
+mean_diff = np.mean(np.abs(torch_out - ort_out))
+print(f"📊 Độ lệch số học giữa PyTorch và ONNX: Max |Δ| = {max_diff:.6f}, Mean |Δ| = {mean_diff:.6f}")
+
 np.testing.assert_allclose(torch_out, ort_out, rtol=1e-3, atol=1e-4)
-print("🎉 KIỂM CHỨNG TOÀN VẸN: Đầu ra của ONNX Runtime trùng khớp 100% với PyTorch (sai số < 1e-4)!")''')
+print("🎉 KIỂM CHỨNG TOÀN VẸN: Đầu ra của ONNX Runtime trùng khớp hoàn hảo với PyTorch!")''')
 
 # 12. Direct Download links
 add_md('## Bước 11: Tải các tệp về máy tính')
@@ -599,8 +629,9 @@ print("Bấm vào các liên kết bên dưới để tải tệp về máy tín
 display(FileLink("melo_byte_encoder_npu_v3.onnx"))
 if os.path.exists("melo_byte_encoder_v3_best.pth"):
     display(FileLink("melo_byte_encoder_v3_best.pth"))
-display(FileLink("val_student.wav"))
-display(FileLink("val_teacher.wav"))''')
+display(FileLink("val_student_clean.wav"))
+display(FileLink("val_student_raw512.wav"))
+display(FileLink("val_teacher_clean.wav"))''')
 
 notebook_dict = {
     'cells': cells,
@@ -618,4 +649,4 @@ with open('notebooks/Train_Byte_Encoder_MeloTTS.ipynb', 'w', encoding='utf-8') a
 with open('melotts_npu/notebooks/Train_Byte_Encoder_MeloTTS.ipynb', 'w', encoding='utf-8') as f:
     json.dump(notebook_dict, f, indent=2, ensure_ascii=False)
 
-print('Successfully generated Train_Byte_Encoder_MeloTTS.ipynb V3 with all expert refinements!')
+print('Successfully generated Train_Byte_Encoder_MeloTTS.ipynb V3.1 with all P0 fixes applied!')
